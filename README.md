@@ -1,6 +1,6 @@
-# Rate Control Protocol (RCP) Reproduction
+# Rate Control Protocol (RCP)
 
-This is the simulation code used to reproduce the RCP work results of the Average Completion Time for varying Flow Sizes.
+This project was done for CS 244 Spring 2014 by Lisa Yan and Richard Hsu. The project includes simulation code used to reproduce the RCP work results of the Average Completion Time for varying Flow Sizes (See Figure 12 of the [full paper][full]).
 
 ## Rate Control Protocol
 
