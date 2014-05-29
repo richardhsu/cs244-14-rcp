@@ -4,11 +4,9 @@ This is the simulation code used to reproduce the RCP work results of the Averag
 
 ## Rate Control Protocol
 
-Original RCP Site: http://yuba.stanford.edu/rcp/
+"Why Flow-Completion Time is the Right Metric for Congestion Control" [\[pdf\]][paper] [\[full version\]][full]
+by Nandita Dukkipati and Nick McKeown (http://yuba.stanford.edu/rcp/)
 
-Paper: "Why Flow-Completion Time is the Right Metric for Congestion Control and why this means we need new algorithms" [\[pdf\]][paper]
-
-Authors: Nandita Dukkipati and Nick McKeown
-
-[paper]: http://yuba.stanford.edu/techreports/TR05-HPNG-112102.pdf
+[paper]: http://yuba.stanford.edu/rcp/flowCompTime-dukkipati.pdf
+[full]: http://yuba.stanford.edu/techreports/TR05-HPNG-112102.pdf
 
