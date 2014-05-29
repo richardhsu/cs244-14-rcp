@@ -1,0 +1,9 @@
+# General Files
+.DS_STORE
+*.pyc
+*.swp
+
+# Data output
+*.tr
+logFile*
+flowSizeVsDelay*
