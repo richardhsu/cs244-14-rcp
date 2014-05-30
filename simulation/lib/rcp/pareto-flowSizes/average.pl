@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 
-@fNameIn = ("flow-pareto-sh1.8.tr");
-@fNameOut = ("flowSizeVsDelay-sh1.8");
+@fNameIn = ("logs/flow-pareto-sh1.2.tr", "logs/flow-pareto-sh2.2.tr");
+@fNameOut = ("logs/flowSizeVsDelay-sh1.2", "logs/flowSizeVsDelay-sh2.2");
 
 $maximum = 0;
 

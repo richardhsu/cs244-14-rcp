@@ -2,8 +2,8 @@
 
 $C = 2.4*1000000000/8;
 
-@fNameIn = ("queue-pareto-sh1.8.tr");
-@fNameOut = ("linkUtil-sh1.8");
+@fNameIn = ("logs/queue-pareto-sh1.2.tr", "logs/queue-pareto-sh2.2.tr");
+@fNameOut = ("logs/linkUtil-sh1.2", "logs/linkUtil-sh2.2");
 
 for ($i=0; $i<=$#fNameIn; $i++) {
 

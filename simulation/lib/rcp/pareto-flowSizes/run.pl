@@ -8,9 +8,9 @@ $beta = 1;
 $load = 0.9;
 $numbneck = 1;
 $BWdelay = ($rtt*$cap*1000000000)/(1000*8);
-@pareto_shape = (1.2);
-$meanFlowSize = $BWdelay/1000;
-$init_nr_flows = 5000;
+@pareto_shape = (1.2, 2.2);
+$meanFlowSize = 25;
+$init_nr_flows = 10000;
 
 for ($i = 0; $i < @pareto_shape; $i++) {
   `nice ns sim-rcp-pareto.tcl $sim_end $cap $rtt $load $numbneck $alpha $beta $init_nr_flows $meanFlowSize $pareto_shape[$i] > logs/logFile-pareto-sh$pareto_shape[$i]`;
