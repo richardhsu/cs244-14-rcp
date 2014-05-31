@@ -1,0 +1,1630 @@
+diff -crBN ns-allinone-2.35/ns-2.35/common/packet.h ns-allinone-2.35-rcp/ns-2.35/common/packet.h
+*** ns-allinone-2.35/ns-2.35/common/packet.h	2010-05-09 22:28:41.000000000 +0000
+--- ns-allinone-2.35-rcp/ns-2.35/common/packet.h	2014-05-30 23:43:19.528115024 +0000
+***************
+*** 198,206 ****
+  
+          // M-DART packets
+  static const packet_t PT_MDART = 72;
+! 	
+          // insert new packet types here
+! static packet_t       PT_NTYPE = 73; // This MUST be the LAST one
+  
+  enum packetClass
+  {
+--- 198,209 ----
+  
+          // M-DART packets
+  static const packet_t PT_MDART = 72;
+! 
+!         // RCP
+! static const packet_t PT_RCP = 73;
+! 
+          // insert new packet types here
+! static packet_t       PT_NTYPE = 74; // This MUST be the LAST one
+  
+  enum packetClass
+  {
+***************
+*** 397,402 ****
+--- 400,408 ----
+  		// XCP
+  		name_[PT_XCP]="xcp";
+  
++     // RCP
++     name_[PT_RCP]="rcp";
++ 
+  		// Bell Labs (PackMime OL)
+  		name_[PT_BLTRACE]="BellLabsTrace";
+  		
+diff -crBN ns-allinone-2.35/ns-2.35/linkstate/ls.h ns-allinone-2.35-rcp/ns-2.35/linkstate/ls.h
+*** ns-allinone-2.35/ns-2.35/linkstate/ls.h	2010-03-08 05:54:51.000000000 +0000
+--- ns-allinone-2.35-rcp/ns-2.35/linkstate/ls.h	2014-05-30 23:49:35.204115024 +0000
+***************
+*** 134,140 ****
+  		return ib.second ? ib.first : baseMap::end();
+  	}
+  
+! 	void eraseAll() { erase(baseMap::begin(), baseMap::end()); }
+  	T* findPtr(Key key) {
+  		iterator it = baseMap::find(key);
+  		return (it == baseMap::end()) ? (T *)NULL : &((*it).second);
+--- 134,140 ----
+  		return ib.second ? ib.first : baseMap::end();
+  	}
+  
+! 	void eraseAll() { this->erase(baseMap::begin(), baseMap::end()); }
+  	T* findPtr(Key key) {
+  		iterator it = baseMap::find(key);
+  		return (it == baseMap::end()) ? (T *)NULL : &((*it).second);
+diff -crBN ns-allinone-2.35/ns-2.35/Makefile.in ns-allinone-2.35-rcp/ns-2.35/Makefile.in
+*** ns-allinone-2.35/ns-2.35/Makefile.in	2011-10-23 16:29:54.000000000 +0000
+--- ns-allinone-2.35-rcp/ns-2.35/Makefile.in	2014-05-30 23:41:20.464115024 +0000
+***************
+*** 327,332 ****
+--- 327,333 ----
+  	mcast/lms-sender.o \
+  	queue/delayer.o \
+  	xcp/xcpq.o xcp/xcp.o xcp/xcp-end-sys.o \
++ 	rcp/rcp.o rcp/rcp-host.o \
+  	wpan/p802_15_4csmaca.o wpan/p802_15_4fail.o \
+  	wpan/p802_15_4hlist.o wpan/p802_15_4mac.o \
+  	wpan/p802_15_4nam.o wpan/p802_15_4phy.o \
+diff -crBN ns-allinone-2.35/ns-2.35/rcp/rcp.cc ns-allinone-2.35-rcp/ns-2.35/rcp/rcp.cc
+*** ns-allinone-2.35/ns-2.35/rcp/rcp.cc	1970-01-01 00:00:00.000000000 +0000
+--- ns-allinone-2.35-rcp/ns-2.35/rcp/rcp.cc	2014-05-30 23:38:38.800115024 +0000
+***************
+*** 0 ****
+--- 1,526 ----
++ /* 
++  * Author: Rui Zhang and Nandita Dukkipati
++  * This file will implement the RCP router.
++  * Part of the code is taken from Dina Katabi's XCP implementation.
++  */
++ 
++ /* rcp.cc.v4
++  * --------
++  * R = R * { 1 + (T/rtt)*[alpha*(C - input_tr/T) - beta*Q/rtt]/link_capacity};
++  * where the input_tr is measured over a time interval of 'T'
++  */
++ 
++ #include <math.h>
++ 
++ #include "red.h"
++ #include "drop-tail.h"
++ #include "tcp.h"
++ #include "random.h"
++ #include "ip.h"
++ #include <string.h>
++ #include "rcp-host.h"
++ 
++ // #define ALPHA 0.4
++ // #define BETA 0.4
++ #define PHI 0.95
++ #define PARENT DropTail
++ // #define INIT_RATE_FACT 0.05 
++ #define RTT 0.2
++ #define INIT_NUMFLOWS 50 
++ // #define TIMESLOT 0.01
++ 
++ #define RTT_GAIN 0.02 //Should be on the order of 1/(number of co-existing flows)
++ 
++ static unsigned int next_router = 0; //Rui: really should be next_queue
++ 
++ class RCPQueue;
++ 
++ 
++ class RCPQTimer : public TimerHandler { 
++ public:
++   RCPQTimer(RCPQueue *a, void (RCPQueue::*call_back)() ) : a_(a), call_back_(call_back) {};
++ protected:
++   virtual void expire (Event *e);
++   void (RCPQueue::*call_back_)();
++   RCPQueue *a_;
++ }; 
++ 
++ 
++ 
++ class RCPQueue : public PARENT {
++   friend class RCPQTimer;
++ public:
++   RCPQueue();
++   int command(int argc, const char*const* argv);
++   void queue_timeout();    // timeout every Tq_ for load stats update
++ protected:
++   // Modified functions
++   virtual void enque(Packet* pkt);
++   virtual Packet* deque();
++ 
++   // ------------ Utility Functions
++   inline double now()  { return  Scheduler::instance().clock(); }
++ 
++   double running_avg(double var_sample, double var_last_avg, double gain);
++   inline double max(double d1, double d2){ if (d1 > d2){return d1;} else {return d2;} }
++   inline double min(double d1, double d2){ if (d1 < d2){return d1;} else {return d2;} }
++ 
++   // ------------- Estimation & Control Helpers
++   void init_vars() {
++     routerId_ = next_router++; // Rui: should be queueId_ instead
++     link_capacity_ = -1;
++     input_traffic_ = 0.0;
++     act_input_traffic_ = 0.0;
++     output_traffic_ = 0.0;
++     last_load_ = 0;
++     traffic_spill_ = 0;
++     num_flows_ = INIT_NUMFLOWS;
++     avg_rtt_ = RTT;
++     this_Tq_rtt_sum_ = 0;
++     this_Tq_rtt_     = 0;
++     this_Tq_rtt_numPkts_ = 0;
++     input_traffic_rtt_   = 0;
++     rtt_moving_gain_ = RTT_GAIN;
++ //    Tq_ = RTT;
++ //    Tq_ = min(RTT, TIMESLOT);
++     Q_ = 0;
++     Q_last = 0;
++   }
++ 
++   virtual void do_on_packet_arrival(Packet* pkt); // called in enque(), but packet may be dropped
++                                                   // used for updating the estimation helping vars 
++                                                   // such as counting the offered_load_
++   virtual void do_before_packet_departure(Packet* p); // called in deque(), before packet leaves
++                                                       // used for writing the feedback in the packet
++   virtual void fill_in_feedback(Packet* p); // called in do_before_packet_departure()
++                                             // used for writing the feedback in the packet
++ 
++   inline double packet_time(Packet* pkt);
++ 
++   //int RCPQueue::timeslot(double time);
++ 
++ 
++  /* ------------ Variables ----------------- */
++   unsigned int    routerId_;
++   RCPQTimer        queue_timer_;
++   double          Tq_;
++ 
++   // Rui: link_capacity_ is set by tcl script.
++   // Rui: must call set-link-capacity after building topology and before running simulation
++   double link_capacity_;
++   double input_traffic_;       // traffic in Tq_
++   double act_input_traffic_;
++   double output_traffic_;
++   double traffic_spill_;  // parts of packets that should fall in next slot
++   double last_load_; 
++   double end_slot_; // end time of the current time slot
++   int num_flows_;
++   double avg_rtt_;
++   double this_Tq_rtt_sum_;
++   double this_Tq_rtt_;
++   double this_Tq_rtt_numPkts_;
++   int input_traffic_rtt_;
++   double rtt_moving_gain_;
++   int Q_;
++   int Q_last;
++   double flow_rate_;
++   double alpha_;  // Masayoshi
++   double beta_;   // Masayoshi
++   double gamma_;
++   double min_pprtt_;   // Masayoshi minimum packet per rtt
++   double init_rate_fact_;    // Masayoshi
++   int    print_status_;      // Masayoshi
++   int    rate_fact_mode_;    // Masayoshi
++   double fixed_rate_fact_;   // Masayoshi
++   double propag_rtt_ ;       // Masayoshi (experimental, used with rate_fact_mode_ = 3)
++   double upd_timeslot_ ;       // Masayoshi 
++ 
++   Tcl_Channel   channel_;      // Masayoshi
++ 
++ };
++ 
++ 
++ /*--------------------- Code -------------------------------------*/
++ 
++ static class RCPClass : public TclClass {
++ public:
++   RCPClass() : TclClass("Queue/DropTail/RCP") {}
++   TclObject* create(int, const char*const*) {
++     return (new RCPQueue);
++   }
++ } class_rcp_queue;
++ 
++ 
++ RCPQueue::RCPQueue(): PARENT(), queue_timer_(this, &RCPQueue::queue_timeout),
++ 		      channel_(NULL)
++ {
++   double T;
++   init_vars();
++ 
++   //bind("Tq_", &timeout_);
++ 
++   bind("alpha_", &alpha_);  // Masayoshi
++   bind("beta_", &beta_);    // Masayoshi
++   bind("gamma_", &gamma_); 
++   bind("min_pprtt_", &min_pprtt_);    // Masayoshi
++   bind("init_rate_fact_", &init_rate_fact_);    // Masayoshi
++   bind("print_status_", &print_status_);    // Masayoshi
++   bind("rate_fact_mode_", &rate_fact_mode_);    // Masayoshi
++   bind("fixed_rate_fact_", &fixed_rate_fact_);    // Masayoshi
++   bind("propag_rtt_", &propag_rtt_);    // Masayoshi
++   bind("upd_timeslot_", &upd_timeslot_);    // Masayoshi
++   Tq_ = min(RTT, upd_timeslot_);  // Tq_ has to be initialized  after binding of upd_timeslot_ 
++   //
++   // fprintf(stdout,"LOG-RCPQueue: alpha_ %f beta_ %f\n",alpha_,beta_);
++ 
++   // Scheduling queue_timer randommly so that routers are not synchronized
++   T = Random::normal(Tq_, 0.2*Tq_);
++   //if (T < 0.004) { T = 0.004; } // Not sure why Dina did this...
++ 
++   end_slot_ = T;
++   queue_timer_.sched(T);
++ }
++ 
++ 
++ Packet* RCPQueue::deque()
++ {
++ 	Packet *p;
++ 
++ 	p = PARENT::deque();
++ 	if (p != NULL)
++ 	  do_before_packet_departure(p);
++ 	return (p);
++ }
++ 
++ void RCPQueue::enque(Packet* pkt)
++ {
++   do_on_packet_arrival(pkt);
++ 
++   PARENT::enque(pkt);
++ }
++ 
++ void RCPQueue::do_on_packet_arrival(Packet* pkt){
++   // Taking input traffic statistics
++   int size = hdr_cmn::access(pkt)->size();
++   hdr_rcp * hdr = hdr_rcp::access(pkt);
++   double pkt_time_ = packet_time(pkt);
++   double end_time = now() + pkt_time_;
++   double part1, part2;
++ 
++   // update avg_rtt_ here
++   double this_rtt = hdr->rtt();
++ 
++   if (this_rtt > 0) {
++ 
++        this_Tq_rtt_sum_ += (this_rtt * size);
++        input_traffic_rtt_ += size;
++        this_Tq_rtt_ = running_avg(this_rtt, this_Tq_rtt_, flow_rate_/link_capacity_);    
++ 
++ //     rtt_moving_gain_ = flow_rate_/link_capacity_;
++ //     avg_rtt_ = running_avg(this_rtt, avg_rtt_, rtt_moving_gain_);
++   }
++ 
++   if (end_time <= end_slot_)
++     act_input_traffic_ += size;
++   else {
++     part2 = size * (end_time - end_slot_)/pkt_time_;
++     part1 = size - part2;
++    act_input_traffic_ += part1;
++     traffic_spill_ += part2;
++   }
++ 
++   // Can do some measurement of queue length here
++   // length() in packets and byteLength() in bytes
++ 
++   /* Can read the flow size from a last packet here */
++ }
++ 
++ 
++ void RCPQueue::do_before_packet_departure(Packet* p){
++   hdr_rcp * hdr = hdr_rcp::access(p);
++   int size = hdr_cmn::access(p)->size();
++   output_traffic_ += size;  
++   
++   if ( hdr->RCP_pkt_type() == RCP_SYN )
++   {
++ //	  num_flows_++;
++ 	  fill_in_feedback(p);
++   }
++   else if (hdr->RCP_pkt_type() == RCP_FIN )
++   {
++ //	  num_flows_--;
++   }
++   else if ( hdr->RCP_pkt_type() == RCP_REF || hdr->RCP_pkt_type() == RCP_DATA )
++   {
++ 	  fill_in_feedback(p);
++   }
++ 		  
++ }
++ 
++ 
++ void RCPQueue::queue_timeout()
++ {
++   double temp;
++   double datarate_fact;
++   double estN1;
++   double estN2;
++   int Q_pkts;
++   char clip;
++   int Q_target_;
++ 
++   double ratio;
++   double input_traffic_devider_;
++   double queueing_delay_;
++ 
++   double virtual_link_capacity; // bytes per second
++   
++   last_load_ = act_input_traffic_/Tq_; // bytes per second
++ 
++   Q_ = byteLength();
++   Q_pkts = length();
++  
++   input_traffic_ = last_load_;
++   if (input_traffic_rtt_ > 0)
++     this_Tq_rtt_numPkts_ = this_Tq_rtt_sum_/input_traffic_rtt_; 
++ 
++   /*
++   if (this_Tq_rtt_numPkts_ >= avg_rtt_)
++       rtt_moving_gain_ = (flow_rate_/link_capacity_);
++   else 
++       rtt_moving_gain_ = (flow_rate_/link_capacity_)*(this_Tq_rtt_numPkts_/avg_rtt_)*(Tq_/avg_rtt_);
++    */
++    if (this_Tq_rtt_numPkts_ >= avg_rtt_)
++         rtt_moving_gain_ = (Tq_/avg_rtt_);
++    else 
++         rtt_moving_gain_ = (flow_rate_/link_capacity_)*(this_Tq_rtt_numPkts_/avg_rtt_)*(Tq_/avg_rtt_);
++ 
++   avg_rtt_ = running_avg(this_Tq_rtt_numPkts_, avg_rtt_, rtt_moving_gain_);
++  
++ //  if (Q_ == 0)
++ //	  input_traffic_ = PHI*link_capacity_;
++ //  else
++ //	 input_traffic_ = link_capacity_ + (Q_ - Q_last)/Tq_; 
++ 
++ //  queueing_delay_ = (Q_ ) / (link_capacity_ );
++ //  if ( avg_rtt_ > queueing_delay_ ){
++ //    propag_rtt_ = avg_rtt_ - queueing_delay_;
++ //  } else {
++ //    propag_rtt_ = avg_rtt_;
++ //  } 
++ 
++ 
++   estN1 = input_traffic_ / flow_rate_;
++   estN2 = link_capacity_ / flow_rate_;
++ 
++   if ( rate_fact_mode_ == 0) { // Masayoshi .. for Nandita's RCP
++ 
++    virtual_link_capacity = gamma_ * link_capacity_;
++ 
++     /* Estimate # of active flows with  estN2 = (link_capacity_/flow_rate_) */
++     ratio = (1 + ((Tq_/avg_rtt_)*(alpha_*(virtual_link_capacity - input_traffic_) - beta_*(Q_/avg_rtt_)))/virtual_link_capacity);
++     temp = flow_rate_ * ratio;
++ 
++   } else if ( rate_fact_mode_ == 1) { // Masayoshi .. for fixed rate fact
++     /* Fixed Rate Mode */
++     temp = link_capacity_ * fixed_rate_fact_;
++ 
++   } else if ( rate_fact_mode_ == 2) { 
++ 
++     /* Estimate # of active flows with  estN1 = (input_traffic_/flow_rate_) */
++ 
++     if (input_traffic_ == 0.0 ){
++       input_traffic_devider_ = link_capacity_/1000000.0;
++     } else {
++       input_traffic_devider_ = input_traffic_;
++     }
++     ratio = (1 + ((Tq_/avg_rtt_)*(alpha_*(link_capacity_ - input_traffic_) - beta_*(Q_/avg_rtt_)))/input_traffic_devider_);
++     temp = flow_rate_ * ratio;
++ 
++   } else if ( rate_fact_mode_ == 3) { 
++     //if (input_traffic_ == 0.0 ){
++     //input_traffic_devider_ = link_capacity_/1000000.0;
++     //    } else {
++     //input_traffic_devider_ = input_traffic_;
++     //}
++     ratio =  (1 + ((Tq_/propag_rtt_)*(alpha_*(link_capacity_ - input_traffic_) - beta_*(Q_/propag_rtt_)))/link_capacity_);
++     temp = flow_rate_ * ratio;
++   } else  if ( rate_fact_mode_ == 4) { // Masayoshi .. Experimental
++     ratio = (1 + ((Tq_/avg_rtt_)*(alpha_*(link_capacity_ - input_traffic_) - beta_*(Q_/avg_rtt_)))/link_capacity_);
++     temp = flow_rate_ * ratio;
++     // link_capacity_ : byte/sec
++   } else  if ( rate_fact_mode_ == 5) {
++     // temp = - link_capacity_ * ( Q_/(link_capacity_* avg_rtt_) - 1.0);
++     //temp = flow_rate_ +  link_capacity_ * (alpha_ * (1.0 - input_traffic_/link_capacity_) - beta_ * ( Q_/(avg_rtt_*link_capacity_) )) * Tq_;
++     temp = link_capacity_ * exp ( - Q_/(link_capacity_* avg_rtt_));
++   } else  if ( rate_fact_mode_ == 6) {
++     temp = link_capacity_ * exp ( - Q_/(link_capacity_* propag_rtt_));
++   } else  if ( rate_fact_mode_ == 7) {
++      temp = - link_capacity_ * ( Q_/(link_capacity_* propag_rtt_) - 1.0);
++   } else  if ( rate_fact_mode_ == 8) {
++     temp = flow_rate_ +  link_capacity_ * (alpha_ * (1.0 - input_traffic_/link_capacity_) - beta_/avg_rtt_ * ( Q_/(propag_rtt_*link_capacity_) - 0.8 )) * Tq_;
++   }
++ 
++ 
++   if ( rate_fact_mode_ != 4) { // Masayoshi .. Experimental
++     if (temp < min_pprtt_ * (1000/avg_rtt_) ){     // Masayoshi
++       flow_rate_ = min_pprtt_ * (1000/avg_rtt_) ; // min pkt per rtt 
++       clip  = 'L';
++     } else if (temp > virtual_link_capacity){
++       flow_rate_ = virtual_link_capacity;
++       clip = 'U';
++     } else {
++       flow_rate_ = temp;
++       clip = 'M';
++     }
++   }else{
++     if (temp < 16000.0 ){    // Masayoshi 16 KB/sec = 128 Kbps
++       flow_rate_ = 16000.0;
++       clip  = 'L';
++     } else if (temp > link_capacity_){
++       flow_rate_ = link_capacity_;
++       clip = 'U';
++     } else {
++       flow_rate_ = temp;
++       clip = 'M';
++     }
++   }
++ 
++ 
++ //  else if (temp < 0 )  
++ //	 flow_rate_ = 1000/avg_rtt_; // 1 pkt per rtt 
++ 
++   datarate_fact = flow_rate_/link_capacity_;
++ 
++ //   if (print_status_ == 1) 
++ //   if (routerId_ == 0) 
++ //      	   fprintf(stdout, "%f %d %f %f %f\n", now(), length(), datarate_fact, output_traffic_/(link_capacity_*Tq_), avg_rtt_);
++ //	fprintf(stdout, "%s %f %d %d %f %f %f\n", this->name(),now(), byteLength(), Q_pkts, datarate_fact, last_load_, avg_rtt_);
++      //	fprintf(stdout, "%s %f %d %d %.10lf %f %f %f %f %f %f %f %c\n", this->name(),now(), byteLength(), Q_pkts, datarate_fact, last_load_, avg_rtt_,(link_capacity_ - input_traffic_)/link_capacity_, (Q_/propag_rtt_)/link_capacity_,ratio,estN1,estN2,clip);
++ 
++      if(channel_ != NULL){
++        char buf[2048];
++        sprintf(buf, "%s %f %d %d %.10lf %f %f %f %f %f %f %f %c\n", this->name(),now(), byteLength(), Q_pkts, datarate_fact, last_load_, avg_rtt_,(link_capacity_ - input_traffic_)/link_capacity_, (Q_/avg_rtt_)/link_capacity_,ratio,estN1,estN2,clip);
++ 	   // sprintf(buf, "%f %d %.5lf %f %f %f %f %f %c\n", now(), byteLength(), datarate_fact, avg_rtt_, this_Tq_rtt_, this_Tq_rtt_numPkts_, last_load_, (link_capacity_ - input_traffic_)/link_capacity_, clip);
++ //       sprintf(buf, "%f r_ %f estN1_ %f estN2_ %f \n", now(), datarate_fact, estN1, estN2); 
++ 	   (void)Tcl_Write(channel_, buf, strlen(buf));
++      }
++ 
++ // fflush(stdout);
++ 
++   Tq_ = min(avg_rtt_, upd_timeslot_);
++   this_Tq_rtt_ = 0;
++   this_Tq_rtt_sum_ = 0;
++   input_traffic_rtt_ = 0;
++   Q_last = Q_;
++   act_input_traffic_ = traffic_spill_;
++   traffic_spill_ = 0;  
++   output_traffic_ = 0.0;
++   end_slot_ = now() + Tq_;
++   queue_timer_.resched(Tq_);
++ }
++ 
++ 
++ /* Rui: current scheme:  */
++ void RCPQueue::fill_in_feedback(Packet* p){
++ 
++   hdr_rcp * hdr = hdr_rcp::access(p);
++   double request = hdr->RCP_request_rate();
++   
++   // update avg_rtt_ here
++   // double this_rtt = hdr->rtt();
++   
++   /*
++   if (this_rtt > 0) {
++     avg_rtt_ = running_avg(this_rtt, avg_rtt_, RTT_GAIN);
++   }
++   */
++ 
++   if (request < 0 || request > flow_rate_)
++     hdr->set_RCP_rate(flow_rate_);
++ }
++ 
++ int RCPQueue::command(int argc, const char*const* argv)
++ {
++   Tcl& tcl = Tcl::instance();
++ 
++   if (argc == 2) {
++     ;
++   }
++   else if (argc == 3) {
++     if (strcmp(argv[1], "set-link-capacity") == 0) {
++       link_capacity_ = strtod(argv[2],0);
++       if (link_capacity_ < 0.0) {printf("Error: BW < 0\n"); abort();}
++       // Rui: Link capacity is in bytes.
++       flow_rate_ = link_capacity_ * init_rate_fact_;
++ 
++       if ( rate_fact_mode_ == 1) { // Masayoshi
++ 	flow_rate_ = link_capacity_ * fixed_rate_fact_;
++       }
++ 
++       // Initializing the PARENT 
++ #ifdef RED_PARENT
++       edp_.th_min = 0.4 * limit();		    // minthresh
++       edp_.th_max = 0.8 * limit();	            // maxthresh
++       edp_.q_w = 0.01 / limit();		    // for EWMA
++       edp_.max_p_inv = 3;
++ 	      
++       // If you have an old version of ns and you are getting a compilation 
++       // error then comments the two lines below
++       edp_.th_min_pkts = 0.6 * limit();		    // minthresh
++       edp_.th_max_pkts = 0.8 * limit();	            // maxthresh
++ 
++       //printf("RED Dropping Policy, Min %g, Max %g, W %g, inv_p %g \n",
++       //edp_.th_min,edp_.th_max,edp_.q_w,edp_.max_p_inv);
++ #endif   
++       return (TCL_OK);
++ 
++     } else if (strcmp(argv[1], "set-rate-fact-mode") == 0) { // Masayoshi
++       rate_fact_mode_ = atoi(argv[2]);
++       if (rate_fact_mode_ != 0 && rate_fact_mode_ != 1){
++ 	printf("Error: (rcp) rate_fact_mode_ should be 1 or 0\n"); 
++       }
++       return (TCL_OK);
++     } else if (strcmp(argv[1], "set-fixed-rate-fact") == 0) { // Masayoshi
++       fixed_rate_fact_ = strtod(argv[2],0);
++       if (fixed_rate_fact_ < 0.0 || fixed_rate_fact_ > 1.0){
++ 	printf("Error: (rcp) fixed_rate_fact_ < 0 or >1.0\n"); 
++ 	abort();
++       }
++       return (TCL_OK);
++     } else if (strcmp(argv[1], "set-flow-rate") == 0) { // Masayoshi
++       flow_rate_ = strtod(argv[2],0);
++       return (TCL_OK);
++     }
++     if (strcmp(argv[1], "attach") == 0) {
++       int mode;
++       const char* id = argv[2];
++       channel_ = Tcl_GetChannel(tcl.interp(),
++                                 (char*) id, &mode);
++       if (channel_ == NULL) {
++ 	tcl.resultf("Tagger (%s): can't attach %s for writing",
++ 		    name(), id);
++ 	return (TCL_ERROR);
++       }
++       return (TCL_OK);
++     }
++   }
++   return PARENT::command(argc, argv);
++ }
++ 
++ 
++ inline double RCPQueue::packet_time(Packet* pkt){
++   return (hdr_cmn::access(pkt)->size()/link_capacity_);
++ }
++ 
++ void RCPQTimer::expire(Event *) { 
++   (*a_.*call_back_)();
++ }
++ 
++ double RCPQueue::running_avg(double var_sample, double var_last_avg, double gain)
++ {
++ 	double avg;
++ 	if (gain < 0)
++ 	  exit(3);
++ 	avg = gain * var_sample + ( 1 - gain) * var_last_avg;
++ 	return avg;
++ }
+diff -crBN ns-allinone-2.35/ns-2.35/rcp/rcp-host.cc ns-allinone-2.35-rcp/ns-2.35/rcp/rcp-host.cc
+*** ns-allinone-2.35/ns-2.35/rcp/rcp-host.cc	1970-01-01 00:00:00.000000000 +0000
+--- ns-allinone-2.35-rcp/ns-2.35/rcp/rcp-host.cc	2014-05-30 23:38:38.800115024 +0000
+***************
+*** 0 ****
+--- 1,788 ----
++ /* -*-	Mode:C++; c-basic-offset:8; tab-width:8; indent-tabs-mode:t -*- */
++ /*
++  * Copyright (c) 1997 Regents of the University of California.
++  * All rights reserved.
++  * 
++  * Redistribution and use in source and binary forms, with or without
++  * modification, are permitted provided that the following conditions
++  * are met:
++  * 1. Redistributions of source code must retain the above copyright
++  *    notice, this list of conditions and the following disclaimer.
++  * 2. Redistributions in binary form must reproduce the above copyright
++  *    notice, this list of conditions and the following disclaimer in the
++  *    documentation and/or other materials provided with the distribution.
++  * 3. All advertising materials mentioning features or use of this software
++  *    must display the following acknowledgement:
++  * 	This product includes software developed by the MASH Research
++  * 	Group at the University of California Berkeley.
++  * 4. Neither the name of the University nor of the Research Group may be
++  *    used to endorse or promote products derived from this software without
++  *    specific prior written permission.
++  * 
++  * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++  * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++  * SUCH DAMAGE.
++  */
++ 
++ /* rcp-host5.cc
++  * -------
++  * rtp1.cc: rate is fixed at the beginning and does not change during flow duration.
++  * rtp2.cc: rate is reset every round trip time. (Too much probing)
++  * rtp3.cc: rate is reset every (RTT + SYN_DELAY). To disable subsequent SYNs, set SYN_DELAY larger than all flow durations.
++  * rtp4.cc: SYN(ACK) packets are of different size from data packets. Rate is reset every (RTT + SYN_DELAY).
++  * rtp5.cc: Rate is reset every SYN_DELAY time.
++  */
++ 
++ 
++ //#define DELETE_AGENTS  //xxxxrui
++ 
++ // #define MASAYOSHI_DEBUG 1
++ 
++ #include <stdlib.h>
++ 
++ #include "config.h"
++ #include "agent.h"
++ #include "random.h"
++ #include "rcp-host.h"
++ #include "ip.h" /* Nandita Rui */
++ 
++ //#define SYN_DELAY 0.05
++ #define SYN_DELAY 0.5
++ #define REF_FACT 4  //Number of REFs per RTT
++ #define RCP_HDR_BYTES 40  //same as TCP for fair comparison
++ #define QUIT_PROB 0.1  //probability of quitting if assigned rate is zero
++ #define REF_INTVAL 1.0 //
++ 
++ int hdr_rcp::offset_;
++ 
++ class RCPHeaderClass : public PacketHeaderClass {
++ public: 
++ 	RCPHeaderClass() : PacketHeaderClass("PacketHeader/RCP", sizeof(hdr_rcp)) {
++ 		bind_offset(&hdr_rcp::offset_);
++ 	}
++ } class_rcphdr;
++ 
++ static class RCPAgentClass : public TclClass {
++ public:
++ 	RCPAgentClass() : TclClass("Agent/RCP") {}
++ 	TclObject* create(int, const char*const*) {
++ 		return (new RCPAgent());
++ 	}
++ } class_rcp_agent;
++ 
++ RCPAgent::RCPAgent() : Agent(PT_RCP), lastpkttime_(-1e6), 
++ 	rcp_timer_(this, &RCPAgent::timeout), num_sent_(0),
++ 	ref_timer_(this, &RCPAgent::ref_timeout), rtt_(0),
++ 	RCP_state(RCP_INACT), numOutRefs_(0),
++     min_rtt_(SYN_DELAY*REF_FACT*10), ref_seqno_(0),
++     num_dataPkts_acked_by_receiver_(0), num_dataPkts_received_(0),
++     num_Pkts_to_retransmit_(0), num_pkts_resent_(0),
++     num_enter_retransmit_mode_(0), rto_timer_(this, &RCPAgent::retrans_timeout)
++ {
++ 	bind("seqno_", &seqno_);
++ 	bind("packetSize_", &size_);
++ 	/* numpkts_ has file size, need not be an integer */
++ 	bind("numpkts_",&numpkts_);
++ 	bind("init_refintv_fix_",&init_refintv_fix_);
++     bind("fid_",&fid_);
++ }
++ 
++ 
++ void RCPAgent::reset() /* reset() is added by Masayoshi */
++ {
++ 	lastpkttime_ = -1e6;
++ 	num_sent_ = 0;
++ 	seqno_ = 0;
++ 	ref_seqno_ = 0;
++ 	rtt_ = 0;
++ 	RCP_state = RCP_INACT;
++ 	numOutRefs_ = 0;
++ 	min_rtt_ = SYN_DELAY * REF_FACT * 10;
++ 
++     num_dataPkts_acked_by_receiver_ = 0;
++     num_dataPkts_received_          = 0;
++     num_Pkts_to_retransmit_         = 0;
++     num_pkts_resent_                = 0;
++     num_enter_retransmit_mode_      = 0;
++ }
++ 
++ void RCPAgent::start()
++ {
++ 	double now = Scheduler::instance().clock();
++ 
++     RCP_state = RCP_RUNNING;
++ 	Tcl::instance().evalf("%s begin-datasend", this->name()); /* Added by Masayoshi */
++ 
++ 	// rcp_timer_.resched(interval_); // Masayosi. 
++ 	// // Always start sending after SYN-ACK receive 
++ 	// // is not good when gamma is very very small.
++ 
++ 	if( interval_ > REF_INTVAL * min_rtt_ ){  // At this momoent min_rtt_ has been set (by SYNACK)
++ 		ref_timer_.resched(REF_INTVAL * min_rtt_);
++ 		RCP_state = RCP_RUNNING_WREF;
++ #ifdef MASAYOSHI_DEBUG
++ 		fprintf(stdout,"MASA %lf RCP_RUNNING -> RCP_RUNNING_WREF at start %s\n",now,this->name());
++ #endif
++ 	} else {
++ 		RCP_state = RCP_RUNNING;
++ 		ref_timer_.force_cancel();
++ #ifdef MASAYOSHI_DEBUG
++ 		fprintf(stdout,"MASA %lf RCP_RUNNING at start %s\n",now,this->name());
++ #endif
++ 	}
++ 
++ 	// timeout should be later than the above RCP_state change.
++ 	// This is because if numpkts_ is one (1 pkt file transfer),
++ 	// the above state change may harmfully overwrite
++ 	// the change to RCP_FINSENT in timeout().
++ 	timeout();  
++ }
++ 
++ void RCPAgent::stop()
++ {
++     rcp_timer_.force_cancel();
++ 	ref_timer_.force_cancel();
++     rto_timer_.force_cancel();
++     finish();
++ }
++ 
++ void RCPAgent::pause()
++ {
++     rcp_timer_.force_cancel();
++ 	ref_timer_.force_cancel();
++     rto_timer_.force_cancel();
++ 	RCP_state = RCP_INACT;
++ }
++ 
++ /* Nandita: RCP_desired_rate sets the senders initial desired rate
++  */
++ double RCPAgent::RCP_desired_rate()
++ {
++      double RCP_rate_ = -1; 
++          return(RCP_rate_);
++ }
++ 
++ /* Nandita: sendfile() 
++  * Sends a SYN packet and enters RCPS_LISTEN state
++  * On receiving the SYN_ACK packet (with the rate) from
++  * RCP receiver, the recv() function calls start() and
++  * packets are sent at the desired rate
++  */
++ void RCPAgent::sendfile()
++ {
++ 	// Sending SYN packet: 
++ 	Packet* p = allocpkt();
++ 	hdr_rcp *rh = hdr_rcp::access(p);
++ 
++ 	// SYN and SYNACK packets should be smaller than data packets.
++ 	hdr_cmn *cmnh = hdr_cmn::access(p);
++ 
++ 	cmnh->size_ = RCP_HDR_BYTES;
++ 	
++ 	rh->seqno() = ref_seqno_++; /* Masayoshi */
++ 
++ 	rh->ts_ = Scheduler::instance().clock();
++ 	rh->rtt_ = rtt_;
++        
++ 	rh->set_RCP_pkt_type(RCP_SYN);
++ 	rh->set_RCP_rate(RCP_desired_rate());
++ 
++     rh->set_RCP_numPkts_rcvd(num_dataPkts_received_);
++     rh->flowIden() = fid_;
++ 
++     fprintf(stdout,"Starting RCP flow fid_ %d \n", fid_);
++ 
++  	target_->recv(p, (Handler*)0);
++ 
++ 	// Change state of sender: Sender is in listening state 
++ 	RCP_state = RCP_SYNSENT;
++ 
++ 	ref_timer_.resched(SYN_DELAY);
++ 	lastpkttime_ =  Scheduler::instance().clock();  // Masayoshi
++ 
++ 	Tcl::instance().evalf("%s syn-sent", this->name()); /* Added by Masayoshi */
++ }
++ 
++ 
++ /* Nandita Rui
++  * This function has been changed.
++  */
++ void RCPAgent::timeout() 
++ {
++ 	if (RCP_state == RCP_RUNNING || RCP_state == RCP_RUNNING_WREF) {
++ 		if (num_sent_ < numpkts_ - 1) {
++ 			sendpkt();
++ 			rcp_timer_.resched(interval_);
++ 
++ 		} else {
++ 
++ 			double now = Scheduler::instance().clock();
++ 			sendlast();
++ 			Tcl::instance().evalf("%s finish-datasend", this->name()); /* Added by Masayoshi */
++ 			RCP_state = RCP_FINSENT;
++ 			
++ #ifdef MASAYOSHI_DEBUG			
++ 			fprintf(stdout,"MASA %lf  .. -> RCP_FINSENT %s\n",now,this->name());
++ #endif
++ 			rcp_timer_.force_cancel();
++ 			ref_timer_.force_cancel();
++             rto_timer_.resched(2*rtt_);
++ 		}
++ 
++ 	} else if (RCP_state == RCP_RETRANSMIT) {
++ 
++           if (num_pkts_resent_ < num_Pkts_to_retransmit_ - 1) {
++               sendpkt();
++               rcp_timer_.resched(interval_);
++           } else if (num_pkts_resent_ == num_Pkts_to_retransmit_ - 1) {
++               sendpkt();
++               rcp_timer_.force_cancel();
++               ref_timer_.force_cancel();
++               rto_timer_.resched(2*rtt_);
++           }
++     }
++ }
++ 
++ void RCPAgent::retrans_timeout()
++ { 
++     RCP_state = RCP_RETRANSMIT;
++     num_enter_retransmit_mode_++; 
++     
++     num_pkts_resent_ = 0;
++     num_Pkts_to_retransmit_ = numpkts_ - num_dataPkts_acked_by_receiver_;
++    // fprintf(stdout, "%lf %s Entered retransmission mode %d, num_Pkts_to_retransmit_ %d \n", Scheduler::instance().clock(), this->name(), num_enter_retransmit_mode_, num_Pkts_to_retransmit_);
++ 
++     if (num_Pkts_to_retransmit_ > 0)
++         rcp_timer_.resched(interval_);
++ }
++ 
++ 
++ /* Rui
++  * This function 
++  */
++ void RCPAgent::ref_timeout() 
++ {
++ 	if (RCP_state==RCP_SYNSENT || RCP_state==RCP_RUNNING || RCP_state==RCP_CONGEST || RCP_state == RCP_RUNNING_WREF){
++ 		Packet* send_p = allocpkt();
++ 		hdr_rcp *rh = hdr_rcp::access(send_p);
++ 
++ 		// SYN and SYNACK packets should be smaller than data packets.
++ 		hdr_cmn *cmnh = hdr_cmn::access(send_p);
++ 		cmnh->size_ = RCP_HDR_BYTES;
++ 		// cmnh->size_ = 1;
++ 		
++ 		//		rh->seqno() = ref_seqno_ ++;  /* added by Masayoshi */
++ 		rh->seqno() = seqno_;
++ 		ref_seqno_ ++;  /* added by Masayoshi */
++ 		rh->ts_ = Scheduler::instance().clock();
++ 		rh->rtt_ = rtt_;
++ 	
++         if (RCP_state == RCP_SYNSENT) {
++             rh->set_RCP_pkt_type(RCP_SYN);
++            // fprintf(stdout, "%lf %s Sending SYN packet again... \n", Scheduler::instance().clock(), this->name());
++         } else {
++ 		    rh->set_RCP_pkt_type(RCP_REF);
++             numOutRefs_++;
++         }
++ 
++ 		rh->set_RCP_rate(RCP_desired_rate());
++         rh->set_RCP_numPkts_rcvd(num_dataPkts_received_);
++         rh->flowIden() = fid_;
++ 		
++ 		target_->recv(send_p, (Handler*)0);
++ 
++ 		// ref_timer_.resched(min(SYN_DELAY, min_rtt_/REF_FACT));
++ 		ref_timer_.resched(min(SYN_DELAY, REF_INTVAL * min_rtt_));
++ 	}
++ }
++ 
++ /*
++  * finish() is called when we must stop (either by request or because
++  * we're out of packets to send.
++  */
++ void RCPAgent::finish()
++ {
++ 	double now = Scheduler::instance().clock(); 
++ 
++ 	RCP_state = RCP_INACT;
++     fid_      = 0; 
++ 
++ #ifdef MASAYOSHI_DEBUG
++ 	fprintf(stdout,"MASA %lf  .. -> RCP_INACT %s\n",now,this->name());
++ #endif
++ 
++ 	Tcl::instance().evalf("%s done", this->name()); /* Added by Masayoshi */
++ 
++ #ifdef DELETE_AGENTS
++ 	Tcl::instance().evalf("delete %s", this->name());
++ #endif
++ }
++ 
++ 
++ /* Nandita Rui
++  * This function has been changed.
++  */
++ void RCPAgent::recv(Packet* p, Handler*)
++ {
++ 	hdr_rcp* rh = hdr_rcp::access(p);
++ 
++    if ( (rh->RCP_pkt_type() == RCP_SYN) || ((RCP_state != RCP_INACT) && (rh->flowIden() == fid_)) ) {
++ //    if ((rh->RCP_pkt_type() == RCP_SYN) || (rh->flowIden() == fid_)) {
++ 
++ 	switch (rh->RCP_pkt_type()) {
++ 	case RCP_SYNACK:
++ 		rtt_ = Scheduler::instance().clock() - rh->ts();
++ 
++ 		if (min_rtt_ > rtt_)
++ 			min_rtt_ = rtt_;
++ 
++ 		if (rh->RCP_request_rate() > 0) {
++ 			double now = Scheduler::instance().clock();
++ 			interval_ = (size_+RCP_HDR_BYTES)/(rh->RCP_request_rate());
++ 
++ #ifdef MASAYOSHI_DEBUG
++ 			fprintf(stdout,"%lf recv_synack..rate_change_1st %s %lf %lf\n",now,this->name(),interval_,((size_+RCP_HDR_BYTES)/interval_)/(150000000.0 / 8.0));
++ #endif
++ 			
++             if (RCP_state == RCP_SYNSENT)
++ 			    start();
++ 
++ 		}
++ 		else {
++ 			if (rh->RCP_request_rate() < 0) 
++ 				fprintf(stderr, "Error: RCP rate < 0: %f\n",rh->RCP_request_rate());
++ 
++ 			if (Random::uniform(0,1)<QUIT_PROB) { //sender decides to stop
++ 				//				RCP_state = RCP_DONE;
++ 				// RCP_state = RCP_QUITTING; // Masayoshi
++ 				pause();
++ 				double now = Scheduler::instance().clock();
++ 				fprintf(stdout,"LOG: %lf quit by QUIT_PROB\n",now);
++ 			}
++ 			else {
++ 				RCP_state = RCP_CONGEST;
++ 				//can do exponential backoff or probalistic stopping here.
++ 			}
++ 
++ 		}
++ 		break;
++ 
++ 	case RCP_REFACK:
++ 		//		if ( rh->seqno() < ref_seqno_ && RCP_state != RCP_INACT) /* Added  by Masayoshi */
++ 		// if ( rh->seqno() < seqno_ && RCP_state != RCP_INACT) /* Added  by Masayoshi */
++ 		if ( (rh->seqno() <= seqno_)  && RCP_state != RCP_INACT){ /* Added  by Masayoshi */
++ 			numOutRefs_--;
++ 			if (numOutRefs_ < 0) {
++ 				fprintf(stderr, "Extra REF_ACK received! \n");
++ 				{
++ 					if(RCP_state == RCP_INACT)
++ 						fprintf(stderr,"RCP_INACT\n");
++ 					if(RCP_state == RCP_SYNSENT)
++ 						fprintf(stderr,"RCP_SYNSENT\n");
++ 					if(RCP_state == RCP_RUNNING)
++ 						fprintf(stderr,"RCP_RUNNING\n");
++ 					if(RCP_state == RCP_RUNNING_WREF)
++ 						fprintf(stderr,"RCP_RUNNING_WREF\n");
++ 					if(RCP_state == RCP_CONGEST)
++ 						fprintf(stderr,"RCP_CONGEST\n");
++ 				}
++ 				exit(1);
++ 			}
++ 		
++ 			rtt_ = Scheduler::instance().clock() - rh->ts();
++ 			if (min_rtt_ > rtt_)
++ 				min_rtt_ = rtt_;
++ 
++ 			if (rh->RCP_request_rate() > 0) {
++ 				double new_interval = (size_+RCP_HDR_BYTES)/(rh->RCP_request_rate());
++ 				if( new_interval != interval_ ){
++ 					interval_ = new_interval;
++ 					if (RCP_state == RCP_CONGEST)
++ 						start();
++ 					else
++ 						rate_change();
++ 				}
++ 				
++ 			}
++ 			else {
++ 				if (rh->RCP_request_rate() < 0) 
++ 				fprintf(stderr, "Error: RCP rate < 0: %f\n",rh->RCP_request_rate());
++ 				rcp_timer_.force_cancel();
++ 				RCP_state = RCP_CONGEST; //can do exponential backoff or probalistic stopping here.
++ 			}
++ 		}
++ 		break;
++ 
++ 	case RCP_ACK:
++ 
++          num_dataPkts_acked_by_receiver_ = rh->num_dataPkts_received; 
++         if (num_dataPkts_acked_by_receiver_ == numpkts_) {
++             // fprintf(stdout, "%lf %d RCP_ACK: Time to stop \n", Scheduler::instance().clock(), rh->flowIden());
++             stop();
++         }
++ 
++ 		rtt_ = Scheduler::instance().clock() - rh->ts();
++ 		if (min_rtt_ > rtt_)
++ 			min_rtt_ = rtt_;
++ 
++ 		if (rh->RCP_request_rate() > 0) {
++ 			double new_interval = (size_+RCP_HDR_BYTES)/(rh->RCP_request_rate());
++ 			if( new_interval != interval_ ){
++ 				interval_ = new_interval;
++ 				if (RCP_state == RCP_CONGEST)
++ 					start();
++ 				else
++ 					rate_change();
++ 			}
++ 		}
++ 		else {
++ 			fprintf(stderr, "Error: RCP rate < 0: %f\n",rh->RCP_request_rate());
++ 			RCP_state = RCP_CONGEST; //can do exponential backoff or probalistic stopping here.
++ 		}
++ 		break;
++ 
++ 	case RCP_FIN:
++ 		{double copy_rate;
++         num_dataPkts_received_++; // because RCP_FIN is piggybacked on the last packet of flow
++ 		Packet* send_pkt = allocpkt();
++ 		hdr_rcp *send_rh = hdr_rcp::access(send_pkt);
++ 		hdr_cmn *cmnh = hdr_cmn::access(send_pkt);
++ 		cmnh->size_ = RCP_HDR_BYTES;
++ 		
++ 		copy_rate = rh->RCP_request_rate();
++ 		// Can modify the rate here.
++ 		send_rh->seqno() = rh->seqno();
++ 		send_rh->ts() = rh->ts();
++ 		send_rh->rtt() = rh->rtt();
++ 		send_rh->set_RCP_pkt_type(RCP_FINACK);
++ 		send_rh->set_RCP_rate(copy_rate);
++         send_rh->set_RCP_numPkts_rcvd(num_dataPkts_received_);
++         send_rh->flowIden() = rh->flowIden();
++ 			
++ 		target_->recv(send_pkt, (Handler*)0);
++ 		Tcl::instance().evalf("%s fin-received", this->name()); /* Added by Masayoshi */
++ 		break;
++ 		}
++ 
++ 
++ 	case RCP_SYN:
++ 		{double copy_rate;
++ 		
++ 		Packet* send_pkt = allocpkt();
++ 		hdr_rcp *send_rh = hdr_rcp::access(send_pkt);
++ 		hdr_cmn *cmnh = hdr_cmn::access(send_pkt);
++ 		cmnh->size_ = RCP_HDR_BYTES;
++ 		
++ 		copy_rate = rh->RCP_request_rate();
++ 		// Can modify the rate here.
++ 		send_rh->seqno() = rh->seqno();
++ 		send_rh->ts() = rh->ts();
++ 		send_rh->rtt() = rh->rtt();
++ 		send_rh->set_RCP_pkt_type(RCP_SYNACK);
++ 		send_rh->set_RCP_rate(copy_rate);
++         send_rh->set_RCP_numPkts_rcvd(num_dataPkts_received_);
++         send_rh->flowIden() = rh->flowIden();
++ 			
++ 		target_->recv(send_pkt, (Handler*)0);
++         RCP_state = RCP_RUNNING; // Only the receiver changes state here
++ 
++ 		break;}
++ 
++ 	case RCP_FINACK:
++         num_dataPkts_acked_by_receiver_ = rh->num_dataPkts_received;
++ 
++ 	    if (num_dataPkts_acked_by_receiver_ == numpkts_){
++            // fprintf(stdout, "%lf %d RCP_FINACK: Time to stop \n", Scheduler::instance().clock(), rh->flowIden());
++             stop();
++         }
++ 		break;
++ 
++ 	case RCP_REF:
++ 		{
++ 		double copy_rate;
++ 			
++ 		Packet* send_pkt = allocpkt();
++ 		hdr_rcp *send_rh = hdr_rcp::access(send_pkt);
++ 		hdr_cmn *cmnh = hdr_cmn::access(send_pkt);
++ 		cmnh->size_ = RCP_HDR_BYTES;
++ 		
++ 		copy_rate = rh->RCP_request_rate();
++ 		// Can modify the rate here.
++ 		send_rh->seqno() = rh->seqno();
++ 		send_rh->ts() = rh->ts();
++ 		send_rh->rtt() = rh->rtt();
++ 		send_rh->set_RCP_pkt_type(RCP_REFACK);
++ 		send_rh->set_RCP_rate(copy_rate);
++         send_rh->set_RCP_numPkts_rcvd(num_dataPkts_received_);
++         send_rh->flowIden() = rh->flowIden();
++ 		
++ 		target_->recv(send_pkt, (Handler*)0);
++ 		break;}
++ 		
++ 	case RCP_DATA:
++ 		{
++ 		double copy_rate;
++         num_dataPkts_received_++;
++ 			
++ 		Packet* send_pkt = allocpkt();
++ 		hdr_rcp *send_rh = hdr_rcp::access(send_pkt);
++ 		hdr_cmn *cmnh = hdr_cmn::access(send_pkt);
++ 		cmnh->size_ = RCP_HDR_BYTES;
++ 		
++ 		copy_rate = rh->RCP_request_rate();
++ 		// Can modify the rate here.
++ 		send_rh->seqno() = rh->seqno();
++ 		send_rh->ts() = rh->ts();
++ 		send_rh->rtt() = rh->rtt();
++ 		send_rh->set_RCP_pkt_type(RCP_ACK);
++ 		send_rh->set_RCP_rate(copy_rate);
++         send_rh->set_RCP_numPkts_rcvd(num_dataPkts_received_);
++         send_rh->flowIden() = rh->flowIden();
++ 		
++ 		target_->recv(send_pkt, (Handler*)0);
++ 		break;}
++ 
++ 	case RCP_OTHER:
++ 		fprintf(stderr, "received RCP_OTHER\n");
++ 		exit(1);
++ 		break;
++ 
++ 	default:
++ 		fprintf(stderr, "Unknown RCP packet type!\n");
++ 		exit(1);
++ 		break;
++     }
++   }
++ 
++ 	Packet::free(p);
++ }
++ 
++ int RCPAgent::command(int argc, const char*const* argv)
++ {
++ 	if (argc == 2) {
++ 		if (strcmp(argv[1], "rate-change") == 0) {
++ 			rate_change();
++ 			return (TCL_OK);
++ 		} else 
++ 			if (strcmp(argv[1], "start") == 0) {
++                         start();
++                         return (TCL_OK);
++                 } else if (strcmp(argv[1], "stop") == 0) {
++                         stop();
++                         return (TCL_OK);
++                 } else if (strcmp(argv[1], "pause") == 0) {
++                         pause();
++                         return (TCL_OK);
++ 		} else if (strcmp(argv[1], "sendfile") == 0) {
++ 			sendfile();
++ 			return(TCL_OK);
++ 		} else if (strcmp(argv[1], "reset") == 0) { /* Masayoshi */
++ 			reset();
++ 			return(TCL_OK);
++ 		}
++ 		
++ 	} 
++ // 	else if (argc == 3) {
++ // 		// if (strcmp(argv[1], "session") == 0) {
++ //  			session_ = (RCPSession*)TclObject::lookup(argv[2]);
++ //  			return (TCL_OK);
++ //  		} else 
++ // 			if (strcmp(argv[1], "advance") == 0) {
++ //                         int newseq = atoi(argv[2]);
++ //                         advanceby(newseq - seqno_);
++ //                         return (TCL_OK); 
++ //                 } else if (strcmp(argv[1], "advanceby") == 0) {
++ //                         advanceby(atoi(argv[2]));
++ //                         return (TCL_OK);
++ //                 }
++ // 	}
++ 	return (Agent::command(argc, argv));
++ }
++ 
++ /* 
++  * We modify the rate in this way to get a faster reaction to the a rate
++  * change since a rate change from a very low rate to a very fast rate may 
++  * take an undesireably long time if we have to wait for timeout at the old
++  * rate before we can send at the new (faster) rate.
++  */
++ void RCPAgent::rate_change()
++ {
++ 	if (RCP_state == RCP_RUNNING || RCP_state == RCP_RUNNING_WREF) {
++ 		rcp_timer_.force_cancel();
++ 		
++ 		double t = lastpkttime_ + interval_;
++ 		
++ 		double now = Scheduler::instance().clock();
++ 
++ 		if ( t > now) {
++ #ifdef MASAYOSHI_DEBUG
++ 			fprintf(stdout,"%lf rate_change %s %lf %lf\n",now,this->name(),interval_,((size_+RCP_HDR_BYTES)/interval_)/(150000000.0 / 8.0));
++ #endif
++ 			rcp_timer_.resched(t - now);
++ 
++ 			if( (t - lastpkttime_) > REF_INTVAL * min_rtt_ && RCP_state != RCP_RUNNING_WREF ){ 
++ 			// the inter-packet time > min_rtt and not in REF mode. Enter REF MODE.
++ 				RCP_state = RCP_RUNNING_WREF;
++ #ifdef MASAYOSHI_DEBUG
++ 				fprintf(stdout,"MASA %lf RCP_RUNNING -> RCP_RUNNING_WREF at start %s\n",now,this->name());
++ #endif
++ 				if( lastpkttime_ + REF_INTVAL * min_rtt_ > now ){
++ 					ref_timer_.resched(lastpkttime_ + REF_INTVAL * min_rtt_ - now);
++ 				} else {
++ 					ref_timeout();  // send ref packet now.
++ 				}
++ 			}else if ((t-lastpkttime_)<= REF_INTVAL * min_rtt_ && 
++ 				  RCP_state == RCP_RUNNING_WREF ){ 
++ 			// the inter-packet time <= min_rtt and in REF mode.  Exit REF MODE
++ 				RCP_state = RCP_RUNNING;
++ #ifdef MASAYOSHI_DEBUG
++ 				fprintf(stdout,"MASA %lf RCP_RUNNING_WREF -> RCP_RUNNING at start %s\n",now,this->name());
++ #endif
++ 				ref_timer_.force_cancel();
++ 			}
++ 
++ 		} else {
++ #ifdef MASAYOSHI_DEBUG
++ 			fprintf(stdout,"%lf rate_change_sync %s %lf %lf\n",now,this->name(),interval_,((size_+RCP_HDR_BYTES)/interval_)/(150000000.0 / 8.0));
++ #endif
++ 
++ 			// sendpkt();
++ 			// rcp_timer_.resched(interval_);
++             timeout(); // send a packet immediately and reschedule timer 
++ 
++ 
++ 			if( interval_ > REF_INTVAL * min_rtt_ && RCP_state != RCP_RUNNING_WREF ){ 
++ 			// the next packet sendingtime > min_rtt and not in REF mode. Enter REF MODE.
++ 				RCP_state = RCP_RUNNING_WREF;
++ #ifdef MASAYOSHI_DEBUG
++ 				fprintf(stdout,"MASA %lf RCP_RUNNINGF -> RCP_RUNNING_WREF at start %s\n",now,this->name());
++ #endif
++ 				ref_timer_.resched(REF_INTVAL * min_rtt_);
++ 			}else if ( interval_ <= REF_INTVAL * min_rtt_ && RCP_state == RCP_RUNNING_WREF ){ 
++ 			// the next packet sending time <= min_rtt and in REF mode.  Exit REF MODE
++ 				RCP_state = RCP_RUNNING;
++ #ifdef MASAYOSHI_DEBUG
++ 				fprintf(stdout,"MASA %lf RCP_RUNNINGF_WREF -> RCP_RUNNING at start %s\n",now,this->name());
++ #endif
++ 				ref_timer_.force_cancel();
++ 			}
++ 		}
++ 	}
++ }
++ 
++ void RCPAgent::sendpkt()
++ {
++ 	Packet* p = allocpkt();
++ 	hdr_rcp *rh = hdr_rcp::access(p);
++ 	rh->set_RCP_rate(0);
++ 	rh->seqno() = seqno_++;
++ 
++ 	hdr_cmn *cmnh = hdr_cmn::access(p);
++ 	cmnh->size_ += RCP_HDR_BYTES;
++ 
++ 	// To ADD REF Info //////////
++ 	rh->ts_ = Scheduler::instance().clock();
++ 	rh->rtt_ = rtt_;
++ 	rh->set_RCP_pkt_type(RCP_DATA);
++ 	rh->set_RCP_rate(RCP_desired_rate());
++     rh->set_RCP_numPkts_rcvd(num_dataPkts_received_);
++     rh->flowIden() = fid_;
++ 	/////////////////////////////
++ 
++ 
++ 	lastpkttime_ = Scheduler::instance().clock();
++ 	target_->recv(p, (Handler*)0);
++ 
++     if (RCP_state == RCP_RETRANSMIT)
++         num_pkts_resent_++;
++     else
++     	num_sent_++;
++ 
++ 	// ref_timer_.resched(min(SYN_DELAY, min_rtt_/REF_FACT));
++ 	//
++ 	//
++ 	// WRITECODE HERE: If interval > RTT
++ 	// Then schedule REF packet 
++ 	// If not, cancel REF packet sending.
++ }
++ 
++ void RCPAgent::sendlast()
++ {
++ 	Packet* p = allocpkt();
++ 	hdr_rcp *rh = hdr_rcp::access(p);
++ 	rh->set_RCP_rate(0);
++ 	rh->seqno() = seqno_++;
++ 	rh->set_RCP_pkt_type(RCP_FIN);
++     rh->set_RCP_numPkts_rcvd(num_dataPkts_received_);
++     rh->flowIden() = fid_;
++ 
++ 	hdr_cmn *cmnh = hdr_cmn::access(p);
++ 	cmnh->size_ += RCP_HDR_BYTES;
++ 
++ 	lastpkttime_ = Scheduler::instance().clock();
++ 	target_->recv(p, (Handler*)0);
++ 	num_sent_++;
++ }
++ 
++ void RCPATimer::expire(Event* /*e*/) {
++ 	(*a_.*call_back_)();
++ }
++ 
++ // void RCPAgent::makepkt(Packet* p)
++ // {
++ // 	hdr_rcp *rh = hdr_rcp::access(p);
++ 
++ // 	rh->set_RCP_rate(0);
++ // 	/* Fill in srcid_ and seqno */
++ // 	rh->seqno() = seqno_++;
++ // }
++ 
++ // void RCPAgent::sendmsg(int nbytes, const char* /*flags*/)
++ // {
++ //         Packet *p;
++ //         int n;
++ 
++ //         //if (++seqno_ < maxpkts_) {
++ //                 if (size_)
++ //                         n = nbytes / size_;
++ //                 else
++ //                         printf("Error: RCPAgent size = 0\n");
++ 
++ //                 if (nbytes == -1) {
++ //                         start();
++ //                         return;
++ //                 }
++ //                 while (n-- > 0) {
++ //                         p = allocpkt();
++ //                         hdr_rcp* rh = hdr_rcp::access(p);
++ //                         rh->seqno() = seqno_;
++ //                         target_->recv(p);
++ //                 }
++ //                 n = nbytes % size_;
++ //                 if (n > 0) {
++ //                         p = allocpkt();
++ //                         hdr_rcp* rh = hdr_rcp::access(p);
++ //                         rh->seqno() = seqno_;
++ //                         target_->recv(p);
++ //                 }
++ //                 idle();
++ // //         } else {
++ // //                 finish();
++ // //                 // xxx: should we deschedule the timer here? */
++ // //         }
++ // }
++ // void RCPAgent::advanceby(int delta)
++ // {
++ //         maxpkts_ += delta;
++ //         if (seqno_ < maxpkts_ && !running_)
++ //                 start();
++ // }               
++ 
+diff -crBN ns-allinone-2.35/ns-2.35/rcp/rcp-host.h ns-allinone-2.35-rcp/ns-2.35/rcp/rcp-host.h
+*** ns-allinone-2.35/ns-2.35/rcp/rcp-host.h	1970-01-01 00:00:00.000000000 +0000
+--- ns-allinone-2.35-rcp/ns-2.35/rcp/rcp-host.h	2014-05-30 23:38:38.800115024 +0000
+***************
+*** 0 ****
+--- 1,132 ----
++ /*
++  * rcp-host.h
++  *
++  */
++ 
++ #ifndef ns_rcp_h
++ #define ns_rcp_h
++ 
++ #include "config.h"
++ #include "object.h"
++ #include "agent.h"
++ #include "timer-handler.h"
++ #include "ip.h"
++ 
++ enum RCP_PKT_T {RCP_OTHER, 
++ 		RCP_SYN, 
++ 		RCP_SYNACK, 
++ 		RCP_REF, 
++ 		RCP_REFACK,
++ 		RCP_DATA,
++ 		RCP_ACK,
++ 		RCP_FIN,
++ 		RCP_FINACK};
++ 
++ enum RCP_HOST_STATE {RCP_INACT,
++ 		     RCP_SYNSENT, 
++ 		     RCP_CONGEST,
++ 		     RCP_RUNNING,
++ 		     RCP_RUNNING_WREF,
++ 		     RCP_FINSENT,
++              RCP_RETRANSMIT};
++ 
++ struct hdr_rcp {
++ 	int seqno_;
++ 	
++ 	int RCP_enabled_;
++ 	int RCP_pkt_type_;
++ 	double RCP_rate_;  // in bytes per second
++ 
++ 	double rtt_;
++ 	double ts_;
++ 
++ 	static int offset_;
++ 
++     int num_dataPkts_received; // useful for retransmission
++     int flowId;
++     
++ 	inline static int& offset() { return offset_; }
++ 	inline static hdr_rcp* access(const Packet* p) {
++ 		return (hdr_rcp*) p->access(offset_);
++ 	}
++ 
++ 	/* per-field member functions */
++ 	//u_int32_t& srcid() { return (srcid_); }
++ 	inline int& seqno() { return (seqno_); }
++ 	inline double& ts() { return (ts_); }
++ 	inline double& rtt() { return (rtt_); }
++ 	inline void set_RCP_rate(double rate) { RCP_rate_ = rate; }
++ 	inline double& RCP_request_rate() { return RCP_rate_; }
++ 	inline void set_RCP_pkt_type(int type) { RCP_pkt_type_ = type;}
++ 	inline int& RCP_pkt_type() { return RCP_pkt_type_; }
++     inline void set_RCP_numPkts_rcvd(int numPkts) { num_dataPkts_received = numPkts; }
++     inline int& flowIden() { return(flowId); }
++ };
++ 
++ 
++ class RCPAgent;
++ 
++ class RCPATimer : public TimerHandler {
++ public: 
++         RCPATimer(RCPAgent *a, void (RCPAgent::*call_back)()) : TimerHandler() {a_ = a;call_back_=call_back;}
++ protected:
++         virtual void expire(Event *e);
++ 	void (RCPAgent::*call_back_)();
++         RCPAgent *a_;
++ };
++ 
++ class RCPAgent : public Agent {
++  public:
++         RCPAgent();
++         virtual void timeout();
++ 	    virtual void ref_timeout();
++ 
++         /* For retransmissions */
++         virtual void retrans_timeout();
++ 
++         virtual void recv(Packet* p, Handler*);
++         virtual int command(int argc, const char*const* argv);
++         //void advanceby(int delta);
++         //virtual void sendmsg(int nbytes, const char *flags = 0);
++  protected:
++         virtual void sendpkt();
++         virtual void sendlast();
++         void rate_change();
++         virtual void start();
++         virtual void stop();
++         virtual void pause();
++         virtual void reset();  /* Masayoshi */
++         virtual void finish();
++ 	/* Nandita */ 
++ 	virtual void sendfile(); 
++ 	virtual double RCP_desired_rate();
++ 	inline double min(double d1, double d2){ if (d1 < d2){return d1;} else {return d2;} }
++ 
++     double lastpkttime_;
++ 	double rtt_;
++ 	double min_rtt_;
++     int seqno_;
++     int ref_seqno_; /* Masayoshi */
++     int init_refintv_fix_; /* Masayoshi */
++     double interval_;
++ 	double numpkts_;
++ 	int num_sent_;
++ 	int RCP_state;
++ 	int numOutRefs_;
++ 
++     /* for retransmissions */ 
++     int num_dataPkts_acked_by_receiver_;   // number of packets acked by receiver 
++     int num_dataPkts_received_;            // Receiver keeps track of number of packets it received
++     int num_Pkts_to_retransmit_;           // Number of data packets to retransmit
++     int num_pkts_resent_;                  // Number retransmitted since last RTO 
++     int num_enter_retransmit_mode_;        // Number of times we are entering retransmission mode 
++ 
++     RCPATimer rcp_timer_;
++ 	RCPATimer ref_timer_;
++ 
++     /* For retransmissions */ 
++     RCPATimer rto_timer_;
++ };
++ 
++ 
++ #endif
+diff -crBN ns-allinone-2.35/ns-2.35/tcl/lib/ns-default.tcl ns-allinone-2.35-rcp/ns-2.35/tcl/lib/ns-default.tcl
+*** ns-allinone-2.35/ns-2.35/tcl/lib/ns-default.tcl	2010-07-03 22:45:45.000000000 +0000
+--- ns-allinone-2.35-rcp/ns-2.35/tcl/lib/ns-default.tcl	2014-05-30 23:46:50.780115024 +0000
+***************
+*** 119,124 ****
+--- 119,137 ----
+  # support only xcp flows; set to 1 when supporting both tcp and xcp flows; temporary fix for allocating link BW between xcp and tcp queues until dynamic queue weights come into effect. This fix should then go away
+  Queue/XCP set tcp_xcp_on_ 0  ;
+  
++ # RCP
++ Queue/DropTail set tcp_queue_limit_pkts_ 1000
++ Queue/DropTail/RCP set alpha_ 0.4
++ Queue/DropTail/RCP set beta_ 0.4
++ Queue/DropTail/RCP set gamma_ 1
++ Queue/DropTail/RCP set min_pprtt_ 0.01
++ Queue/DropTail/RCP set init_rate_fact_ 0.05
++ Queue/DropTail/RCP set print_status_ 1
++ Queue/DropTail/RCP set rate_fact_mode_ 0
++ Queue/DropTail/RCP set fixed_rate_fact_ 0.05 ;# effecitve only if rate_fact_mode = 1
++ Queue/DropTail/RCP set propag_rtt_ 1.0  ;# effecitve only if rate_fact_mode = 3
++ Queue/DropTail/RCP set upd_timeslot_ 0.01  ;# rate update interval (sec).
++ 
+  Queue/RED set bytes_ true ;		# default changed on 10/11/2004.
+  Queue/RED set queue_in_bytes_ true ;	# default changed on 10/11/2004.
+  # Queue/RED set thresh_ 5
+***************
+*** 1037,1042 ****
+--- 1050,1068 ----
+  Agent/TCP/Reno/XCP set timestamps_ true
+  Agent/TCP/FullTcp/Newreno/XCP set timestamps_ true
+  
++ # RCP
++ Agent/RCP set numpkts_ 1
++ Agent/RCP set seqno_ 0
++ Agent/RCP set packetSize_ 1000
++ Agent/RCP set delayrtt_ 0
++ Agent/RCP set fid_ 0 
++ Agent/RCP set init_refintv_fix_ 0
++ Agent/RCP instproc done {} { }
++ Agent/RCP instproc fin-received {} { }
++ Agent/RCP instproc syn-sent {} { }
++ Agent/RCP instproc begin-datasend {} { }
++ Agent/RCP instproc finish-datasend {} { }
++ 
+  Agent/TCP set eln_ 0
+  Agent/TCP set eln_rxmit_thresh_ 1
+  # Agent/TCP set delay_growth_ false
+diff -crBN ns-allinone-2.35/ns-2.35/tcl/lib/ns-packet.tcl ns-allinone-2.35-rcp/ns-2.35/tcl/lib/ns-packet.tcl
+*** ns-allinone-2.35/ns-2.35/tcl/lib/ns-packet.tcl	2011-10-14 22:11:08.000000000 +0000
+--- ns-allinone-2.35-rcp/ns-2.35/tcl/lib/ns-packet.tcl	2014-05-30 23:47:31.360115024 +0000
+***************
+*** 150,155 ****
+--- 150,156 ----
+  	TFRC 	# TFRC, transport protocol
+  	TFRC_ACK 	# TFRC, transport protocol
+  	XCP 	# XCP, transport protocol
++   RCP   # RCP, transport protocol
+          DCCP            # DCCP, transport protocol
+          DCCP_ACK        # DCCP, transport protocol
+          DCCP_RESET      # DCCP, transport protocol
+diff -crBN ns-allinone-2.35/ns-2.35/trace/trace.cc ns-allinone-2.35-rcp/ns-2.35/trace/trace.cc
+*** ns-allinone-2.35/ns-2.35/trace/trace.cc	2009-11-16 05:51:27.000000000 +0000
+--- ns-allinone-2.35-rcp/ns-2.35/trace/trace.cc	2014-05-30 23:49:01.364115024 +0000
+***************
+*** 47,52 ****
+--- 47,53 ----
+  #include "address.h"
+  #include "trace.h"
+  #include "rap/rap.h"
++ #include "rcp/rcp-host.h"
+  
+  
+  //const double Trace::PRECISION = 1.0e+6; 
+***************
+*** 191,196 ****
+--- 192,198 ----
+  	hdr_tcp *tcph = hdr_tcp::access(p);
+  	hdr_rtp *rh = hdr_rtp::access(p);
+          hdr_rap *raph = hdr_rap::access(p);
++   hdr_rcp *rcph = hdr_rcp::access(p);
+  	hdr_tfrc *tfrch = hdr_tfrc::access(p);
+  	hdr_tfrc_ack *tfrch_ack = hdr_tfrc_ack::access(p);
+  	packet_t t = th->ptype();
+***************
+*** 207,212 ****
+--- 209,216 ----
+  		seqno = tcph->seqno();
+  	else if (t == PT_TFRC)
+  		seqno = tfrch->seqno;
++   else if (t == PT_RCP)
++     seqno = rcph->seqno();
+  	else if (t == PT_TFRC_ACK)
+                  seqno = tfrch_ack->seqno;
+  	else

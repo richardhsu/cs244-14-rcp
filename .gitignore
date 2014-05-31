@@ -7,4 +7,5 @@
 *.tr
 logFile*
 flowSizeVsDelay*
+*.png
 logs/
