@@ -81,6 +81,16 @@ make install
 
 The last line may require a `sudo make install` instead depending on permissions.
 
+#### Matplotlib
+
+Our graphing script requires `matplotlib` for Python in order to generate the graphs. You can install it on Ubuntu as follows:
+
+```bash
+sudo apt-get install python-matplotlib
+```
+
+Otherwise for other Linux systems, make sure to find out how to install it.
+
 ## Reproduction Code
 
 Now you just need to go into the `simulation` folder of our code and type `./run.sh`. You may need execution permissions if it isn't set properly when you've cloned the repository. You'll find the graphs produced and you can read about our reproduction of the research results [here][wordpress].
