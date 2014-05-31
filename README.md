@@ -21,6 +21,12 @@ The following are instructions to help you run it on your own system. We cannot 
 
 You will need to install NS-2.35 All In One package on your system, which you can place anywhere on your system.
 
+**Step 0**: You'll want to make sure you have the necessary tools installed. The following can be used for Ubuntu systems and have been tested for Ubuntu 14.04 LTS. Generally speaking you'll need tools for building, autoconf, g++/gcc and X11 library code.
+
+```bash
+sudo apt-get install build-essential autoconf automake perl g++ libx11-dev libxt-dev libx11-dev libxmu-dev
+```
+
 **Step 1**: In the folder that you want NS-2.35 code perform the following steps:
 
 ```bash
@@ -72,6 +78,8 @@ make clean
 make
 make install
 ```
+
+The last line may require a `sudo make install` instead depending on permissions.
 
 ## Reproduction Code
 
