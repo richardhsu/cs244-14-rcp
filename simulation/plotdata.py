@@ -4,6 +4,7 @@ import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
+import math
 
 class FlowData:
 
@@ -18,6 +19,7 @@ class FlowData:
     """
     self.color = color
     self.marker = marker
+    self.linestyle = '--'
     self.label = label
     self.flowsizes = []
     self.avg_ct = []
@@ -33,6 +35,32 @@ class FlowData:
 
     f.close()
 
+# Following are equal to those set in simulation and needed for
+# slow start analysis.
+RTT = 0.1
+C = 2.4*1000000000/(1000*8)
+
+def slowstart(L):
+  """ Calculates SlowStart
+  See page 2 of RCP Full paper for algorithm used as well.
+  """
+  return (math.log(L + 1, 2) + 0.5)*RTT + L/C
+
+class SlowStart:
+
+  def __init__(self, maxsize):
+    """ Initialize SlowStart Data
+    Calculates slowstart average completion time from 0 to maxsize flows.
+    """
+    self.color = 'r'
+    self.marker = None
+    self.linestyle = '-'
+    self.label = "Slow Start"
+
+    self.flowsizes = list(xrange(maxsize + 1))
+    self.avg_ct = map(slowstart, self.flowsizes)
+    self.max_ct = self.avg_ct
+
 # Start the graphing
 SHAPES = ['1.2', '2.2']
 
@@ -41,14 +69,15 @@ for shape in SHAPES:
   tcp_f = "lib/tcp/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
 
   lines = [FlowData(rcp_f, 'b', '+', 'RCP'),
-           FlowData(tcp_f, '#00FF00', '.', 'TCP')]
+           FlowData(tcp_f, '#00FF00', '.', 'TCP'),
+           SlowStart(200000)]
 
   # Average Flow Completion Time
   fig = plt.figure()
   graph = fig.add_subplot(111)
 
   for line in lines:
-    graph.plot(line.flowsizes, line.avg_ct, linestyle='--',
+    graph.plot(line.flowsizes, line.avg_ct, linestyle=line.linestyle,
                color=line.color, marker=line.marker, label=line.label)
 
   graph.set_yscale("log")
@@ -66,14 +95,14 @@ for shape in SHAPES:
   graph = fig.add_subplot(111)
 
   for line in lines:
-    graph.plot(line.flowsizes, line.avg_ct, linestyle='--',
+    graph.plot(line.flowsizes, line.avg_ct, linestyle=line.linestyle,
                color=line.color, marker=line.marker, label=line.label)
 
   graph.set_yscale("log")
   graph.set_xscale("log")
   for axis in [graph.xaxis, graph.yaxis]:
     axis.set_major_formatter(ScalarFormatter())
-  graph.axis([0, 100000, 0.1, 100])
+  graph.axis([10, 100000, 0.1, 100])
 
   graph.set_ylabel("Average Flow Completion Time [sec]")
   graph.set_xlabel("flow size [pkts] (log scale)")
@@ -85,7 +114,7 @@ for shape in SHAPES:
   graph = fig.add_subplot(111)
 
   for line in lines:
-    graph.plot(line.flowsizes, line.max_ct, linestyle='--',
+    graph.plot(line.flowsizes, line.max_ct, linestyle=line.linestyle,
                color=line.color, marker=line.marker, label=line.label)
 
   graph.set_yscale("log")
