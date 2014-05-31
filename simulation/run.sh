@@ -15,3 +15,5 @@ do
   echo "> Completed queueProcess calculations."
   cd $cwd
 done
+
+python plotdata.py
