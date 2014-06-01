@@ -5,7 +5,7 @@ from scipy.stats import pareto
 debug_flag = False
 
 # Network characteristics
-num_flows = 1000
+num_flows = 2399499 
 # Total number of flows in rcp simulation: 2399499
 packet_size = 1000 # bytes
 link_rate = 2.4 # Gbps
@@ -27,7 +27,7 @@ class Flow(object):
     def __init__(self, arrival, length, inter_arrival):
         self.arrival = arrival # seconds
         self.bitlength = length # number of bits 
-        self.packet_length = self.bitlength/8000
+        self.packet_length = self.bitlength/(8*packet_size)
         self.complete_dl = arrival + length/link_rate_bits
         self.buffered = 0.0
         # seconds lasted until this flow starts
@@ -57,14 +57,15 @@ def generate_flows(num_flows):
     prev_time = 0
     for i in range(num_flows):
         curr_time = prev_time + inter_arrivals[i]
-        flow = Flow(curr_time, round(8*packet_size*flow_lengths[i]), inter_arrivals[i])
+        flow = Flow(curr_time, int(8*packet_size*flow_lengths[i]), inter_arrivals[i])
         all_flows.put(flow)
         prev_time = curr_time
         if debug_flag:
             print "flow created: (%.8f, %d)." % (flow.arrival, flow.packet_length)
+    max_packets = int(max(flow_lengths))
     print "Finished flow generation."
     print
-    return inter_arrivals, all_flows
+    return inter_arrivals, all_flows, max_packets
 
 def update_flows(curr_flows, duration, curr_time):
     stop_time = curr_time + duration
@@ -113,11 +114,29 @@ def arrival_log(new_flow):
 def update_log(curr_time, init_active_count, finished, total_finished):
     return "Update at time %.8f: Initially active: %d, finished: %d, total_finished: %d" % (curr_time, init_active_count, finished, total_finished)
 
+def average_fct(all_done_flows, max_packets):
+    print "Averaging flow completion times (max packets: %d) ... " % (max_packets)
+    fcts_aggregate = {}
+    for flow in all_done_flows:
+        if int(flow.packet_length) not in fcts_aggregate:
+            print "adding entry: %d" % flow.packet_length
+            fcts_aggregate[int(flow.packet_length)] = (flow.fct, 1)
+        else:
+            entry = fcts_aggregate[int(flow.packet_length)]
+            fcts_aggregate[int(flow.packet_length)] = (entry[0] + flow.fct, entry[1] + 1)
+
+    avg_fcts = {}
+    for packet_length in fcts_aggregate.keys():
+        total, count = fcts_aggregate[packet_length]
+        avg_fcts[packet_length] = total/count
+    return avg_fcts
+    
+
 if __name__ == "__main__":
     print "Pareto distribution with shape:", shape, "mean:", mean_npkts
     print "Sanity check on pareto mean packets:", pareto.stats(shape, scale=scale, moments='m')
     print "Poisson process with lambda:", lamb
-    inter_arrival, all_flows = generate_flows(num_flows)
+    inter_arrival, all_flows, max_packets = generate_flows(num_flows)
     curr_flows = []
     all_done_flows = []
     curr_time = 0
@@ -156,6 +175,12 @@ if __name__ == "__main__":
         fct_q.put(FlowCompletion(done_flow.packet_length, done_flow.fct, done_flow.max_flows_bottleneck))
     while not fct_q.empty():
         curr_fct = fct_q.get()
-        print "(packets: %d, fct: %.8f, bottleneck: %d flows)" % (curr_fct.length, curr_fct.fct, curr_fct.flow_bottleneck)
+        if debug_flag:
+            print "(packets: %d, fct: %.8f, bottleneck: %d flows)" % (curr_fct.length, curr_fct.fct, curr_fct.flow_bottleneck)
         fct_list.append((curr_fct.length, curr_fct.fct))
-    # print fct_list
+    avg_fcts = average_fct(all_done_flows, max_packets)
+   
+    packet_list = avg_fcts.keys()
+    packet_list.sort()
+    for packet_length in packet_list:
+        print "Packet length: %d, average FCT: %.8f" % (packet_length, avg_fcts[packet_length])
