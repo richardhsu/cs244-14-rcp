@@ -46,7 +46,7 @@ RCP_pair instproc init {args} {
     $self set pair_id  0
     $self set group_id 0
     $self set id       0
-    $self set debug_mode 0
+    $self set debug_mode 1
 }
 
 RCP_pair instproc set_debug_mode { mode } {
