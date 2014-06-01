@@ -123,4 +123,5 @@ you've cloned the repository. You'll find the graphs produced in the
 [paper]: http://yuba.stanford.edu/rcp/flowCompTime-dukkipati.pdf
 [full]: http://yuba.stanford.edu/techreports/TR05-HPNG-112102.pdf
 [matplotlib]: http://matplotlib.org/users/installing.html
+[scipy]: http://docs.scipy.org/doc/
 
