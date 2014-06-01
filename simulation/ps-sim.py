@@ -2,10 +2,9 @@ import numpy as np
 import Queue
 from scipy.stats import pareto
 
-debug_flag = False
 
 # Network characteristics
-num_flows = 2399499 
+num_flows = 100 
 # Total number of flows in rcp simulation: 2399499
 packet_size = 1000 # bytes
 link_rate = 2.4 # Gbps
@@ -23,6 +22,10 @@ scale = (shape-1.0)/shape * mean_npkts
 load = 0.9
 lamb = link_rate_bits*load/(mean_npkts*(packet_size)*8.0)
 
+# Output parameters and details
+debug_flag = False
+output_file = "lib/ps/pareto-flowSizes/logs/flowSizeVsDelay-sh" + str(shape)
+
 class Flow(object):
     def __init__(self, arrival, length, inter_arrival):
         self.arrival = arrival # seconds
@@ -38,15 +41,6 @@ class Flow(object):
 
     def __cmp__(self, other):
         return cmp(self.arrival, other.arrival)
-
-class FlowCompletion(object):
-    def __init__(self, length, fct, flow_bottleneck=-1):
-        self.length = float(int(length)) # number of packets; force to whole integer but convert to decimal
-        self.fct = fct
-        self.flow_bottleneck = flow_bottleneck
-
-    def __cmp__(self, other):
-        return cmp(self.length, other.length)
 
 def generate_flows(num_flows):
     print "Generating flows..."
@@ -114,26 +108,34 @@ def arrival_log(new_flow):
 def update_log(curr_time, init_active_count, finished, total_finished):
     return "Update at time %.8f: Initially active: %d, finished: %d, total_finished: %d" % (curr_time, init_active_count, finished, total_finished)
 
-def average_fct(all_done_flows, max_packets):
-    print "Averaging flow completion times (max packets: %d) ... " % (max_packets)
+def packet_info(all_done_flows):
     fcts_aggregate = {}
     for flow in all_done_flows:
         if int(flow.packet_length) not in fcts_aggregate:
-            print "adding entry: %d" % flow.packet_length
-            fcts_aggregate[int(flow.packet_length)] = (flow.fct, 1)
-        else:
-            entry = fcts_aggregate[int(flow.packet_length)]
-            fcts_aggregate[int(flow.packet_length)] = (entry[0] + flow.fct, entry[1] + 1)
+            fcts_aggregate[int(flow.packet_length)] = []
+        entries = fcts_aggregate[int(flow.packet_length)]
+        entries.append(flow.fct)
 
+    if debug_flag:
+        for packet_length in fcts_aggregate.keys():
+            print "packet length: %d" % (packet_length), fcts_aggregate[packet_length]
+    return fcts_aggregate
+
+def average_fct(fcts_aggregate):
     avg_fcts = {}
     for packet_length in fcts_aggregate.keys():
-        total, count = fcts_aggregate[packet_length]
-        avg_fcts[packet_length] = total/count
+        packet_entries = fcts_aggregate[packet_length]
+        avg_fcts[packet_length] = sum(packet_entries)/len(packet_entries)
     return avg_fcts
+
+def max_fct(fcts_aggregate):
+    max_fcts = {}
+    for packet_length in fcts_aggregate.keys():
+        max_fcts[packet_length] = max(fcts_aggregate[packet_length]) 
+    return max_fcts
 
 def simulate():
     """
-        Returns a list of tuples: (flow length in packets, average fct)
     """
     print "Pareto distribution with shape:", shape, "mean:", mean_npkts
     print "Sanity check on pareto mean packets:", pareto.stats(shape, scale=scale, moments='m')
@@ -171,24 +173,24 @@ def simulate():
         print
 
     print "Finished simulation. FCT results:"
-    fct_q = Queue.PriorityQueue()
-    fct_list = [] # list form, sorted
     for done_flow in all_done_flows:
-        fct_q.put(FlowCompletion(done_flow.packet_length, done_flow.fct, done_flow.max_flows_bottleneck))
-    while not fct_q.empty():
-        curr_fct = fct_q.get()
         if debug_flag:
-            print "(packets: %d, fct: %.8f, bottleneck: %d flows)" % (curr_fct.length, curr_fct.fct, curr_fct.flow_bottleneck)
-        fct_list.append((curr_fct.length, curr_fct.fct))
-    avg_fcts = average_fct(all_done_flows, max_packets)
-   
+            print "(packets: %d, fct: %.8f, bottleneck: %d flows)" % (done_flow.packet_length, done_flow.fct, done_flow.flow_bottleneck)
+    fcts_aggregate = packet_info(all_done_flows)
+    avg_fcts = average_fct(fcts_aggregate)
+    max_fcts = max_fct(fcts_aggregate)
+
     packet_list = avg_fcts.keys()
     packet_list.sort()
     ret_list = []
     for packet_length in packet_list:
-        print "Packet length: %d, average FCT: %.8f" % (packet_length, avg_fcts[packet_length])
-        ret_list.append((packet_length, avg_fcts[packet_length]))
+        print "Packet length: %d, average FCT: %.8f, max FCT: %.8f" % (packet_length, avg_fcts[packet_length], max_fcts[packet_length])
+        ret_list.append((packet_length, avg_fcts[packet_length], max_fcts[packet_length]))
     return ret_list # tuples (packet_length, average fct)
 
 if __name__ == "__main__":
     ret_list = simulate()
+    f = open(output_file, 'w')
+    for entry in ret_list:
+        f.write('%d 0 0 0 0 0 %.12f 0 %.12f\n' % entry)
+    f.close()
