@@ -81,15 +81,15 @@ make install
 
 The last line may require a `sudo make install` instead depending on permissions.
 
-#### Matplotlib, SciPy, NumPy
+#### Matplotlib
 
-Our graphing script and PS analysis require `matplotlib` and `scipy` for Python in order to generate the graphs. You can install it on Ubuntu as follows:
+Our graphing script requires `matplotlib` for Python in order to generate the graphs. You can install it on Ubuntu as follows:
 
 ```bash
-sudo apt-get install python-numpy python-scipy python-matplotlib ipython ipython-notebook python-pandas python-sympy python-nose
+sudo apt-get install python-matplotlib
 ```
 
-Otherwise for other Linux systems, make sure to find out how to install it. Refer to the respective software sites for more information.
+For other systems you can refer to the [Matplotlib Documentation site][matplotlib] for more information.
 
 ## Reproduction Code
 
@@ -97,5 +97,6 @@ Now you just need to go into the `simulation` folder of our code and type `./run
 
 [paper]: http://yuba.stanford.edu/rcp/flowCompTime-dukkipati.pdf
 [full]: http://yuba.stanford.edu/techreports/TR05-HPNG-112102.pdf
+[matplotlib]: http://matplotlib.org/users/installing.html
 [wordpress]: http://www.wordpress.org
 
