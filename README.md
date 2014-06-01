@@ -109,7 +109,7 @@ sudo pip install numpy
 sudo pip install scipy
 ```
 
-For other systems you can refer to the [Matplotlib Documentation][matplotlib]
+For other systems you can refer to the [Matplotlib Documentation][matplotlib] or [NumPy/SciPy Documentation][scipy] 
 for more information.
 
 ## Reproduction Code
