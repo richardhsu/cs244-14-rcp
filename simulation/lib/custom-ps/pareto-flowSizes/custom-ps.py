@@ -60,8 +60,6 @@ for shape in SHAPES:
       prev_ts = curr_ts
     if processed % 10000 == 0:
       print "Processed %d lines of log file." % (processed)
-      if processed >= 100000:
-        break
     processed += 1
   f.close()
 
@@ -92,9 +90,10 @@ for shape in SHAPES:
   print "Completed calculations."
 
   out = open(out_f, 'w')
-  for key, value in data:
-    avgct = value[1] / value[0]
-    maxct = value[2]
+  for key in data.keys():
+    record = data[key]
+    avgct = record[1] / record[0]
+    maxct = record[2]
 
     out.write('%s 0 0 0 0 0 %.12f 0 %.12f\n' % (key, avgct, maxct))
   out.close()
