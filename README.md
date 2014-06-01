@@ -81,15 +81,15 @@ make install
 
 The last line may require a `sudo make install` instead depending on permissions.
 
-#### Matplotlib
+#### Matplotlib, SciPy, NumPy
 
-Our graphing script requires `matplotlib` for Python in order to generate the graphs. You can install it on Ubuntu as follows:
+Our graphing script and PS analysis require `matplotlib` and `scipy` for Python in order to generate the graphs. You can install it on Ubuntu as follows:
 
 ```bash
-sudo apt-get install python-matplotlib
+sudo apt-get install python-numpy python-scipy python-matplotlib ipython ipython-notebook python-pandas python-sympy python-nose
 ```
 
-Otherwise for other Linux systems, make sure to find out how to install it.
+Otherwise for other Linux systems, make sure to find out how to install it. Refer to the respective software sites for more information.
 
 ## Reproduction Code
 
