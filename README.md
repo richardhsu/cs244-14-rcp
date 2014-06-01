@@ -99,13 +99,14 @@ make install
 
 The last line may require a `sudo make install` instead depending on permissions.
 
-#### Matplotlib
+#### Python libraries
 
-Our graphing script requires `matplotlib` for Python in order to generate the
-graphs. You can install it on Ubuntu as follows:
+Our graphic scripts require additional python libraries to generate the graphics and run additional simulation. You can install them on Ubuntu as follows: 
 
 ```bash
-sudo apt-get install python-matplotlib
+sudo apt-get install python-matplotlib python-pip gfortran libblas-dev liblapack-dev g++
+sudo pip install numpy
+sudo pip install scipy
 ```
 
 For other systems you can refer to the [Matplotlib Documentation][matplotlib]
