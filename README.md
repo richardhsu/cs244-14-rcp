@@ -62,7 +62,7 @@ In the top level of the `ns-allinone-2.35` folder run the install command:
 ```
 
 Hopefully it will install successfully, if not read the error codes and fix.
-Unforutnately we may not be able to provide assistance with this.
+Unfortunately we may not be able to provide assistance with this.
 
 **Step 4:** The installation should provide some output on changing the path.
 You should follow those instructions but here it is reproduced assuming the
@@ -101,7 +101,7 @@ The last line may require a `sudo make install` instead depending on permissions
 
 #### Python libraries
 
-Our graphic scripts require additional python libraries to generate the graphics and run additional simulation. You can install them on Ubuntu as follows: 
+Our scripts require additional Python libraries to run additional simulations and to generate the graphics. You can install them on Ubuntu as follows: 
 
 ```bash
 sudo apt-get install python-matplotlib python-pip gfortran libblas-dev liblapack-dev g++
