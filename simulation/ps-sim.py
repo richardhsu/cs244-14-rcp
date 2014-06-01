@@ -130,9 +130,11 @@ def average_fct(all_done_flows, max_packets):
         total, count = fcts_aggregate[packet_length]
         avg_fcts[packet_length] = total/count
     return avg_fcts
-    
 
-if __name__ == "__main__":
+def simulate():
+    """
+        Returns a list of tuples: (flow length in packets, average fct)
+    """
     print "Pareto distribution with shape:", shape, "mean:", mean_npkts
     print "Sanity check on pareto mean packets:", pareto.stats(shape, scale=scale, moments='m')
     print "Poisson process with lambda:", lamb
@@ -182,5 +184,11 @@ if __name__ == "__main__":
    
     packet_list = avg_fcts.keys()
     packet_list.sort()
+    ret_list = []
     for packet_length in packet_list:
         print "Packet length: %d, average FCT: %.8f" % (packet_length, avg_fcts[packet_length])
+        ret_list.append((packet_length, avg_fcts[packet_length]))
+    return ret_list # tuples (packet_length, average fct)
+
+if __name__ == "__main__":
+    ret_list = simulate()
