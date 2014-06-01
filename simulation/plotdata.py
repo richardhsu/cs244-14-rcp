@@ -37,12 +37,17 @@ class FlowData:
 
 # Following are equal to those set in simulation and needed for
 # slow start analysis.
-RTT = 0.1
-C = 2.4*1000000000/(1000*8)
+RTT = 0.1                   # Sec
+C = 2.4*1000000000/(1000*8) # Pkts/Sec
+LOAD = 0.9
 
 def slowstart(L):
   """ Calculates SlowStart
-  See page 2 of RCP Full paper for algorithm used as well.
+  Why Flow-Completion Time is the Right metric for Congestion Control
+  and why this means we need new algorithms
+  Nandita Dukkipati, Nick McKeown
+  http://yuba.stanford.edu/techreports/TR05-HPNG-112102.pdf
+  Page 2
   """
   return (math.log(L + 1, 2) + 0.5)*RTT + L/C
 
@@ -61,6 +66,30 @@ class SlowStart:
     self.avg_ct = map(slowstart, self.flowsizes)
     self.max_ct = self.avg_ct
 
+def ps(L):
+  """ Calculates Processor Sharing
+  Processor Sharing Flows in the Internet
+  Nandita Dukkipati, Masayoshi Kobayashi, Rui Zhang-Shen, and Nick McKeown
+  http://yuba.stanford.edu/~nanditad/RCP-IWQoS.pdf
+  Page 10 (Page 276 on article)
+  """
+  return 1.5*RTT + L/(C*(1-LOAD))
+
+class ProcessorSharing:
+
+  def __init__(self, maxsize):
+    """ Initialize Processor Sharing Data
+    Calculates given processor sharing algorithm.
+    """
+    self.color = 'r'
+    self.marker = None
+    self.linestyle = ':'
+    self.label = "Processor Sharing"
+
+    self.flowsizes = list(xrange(maxsize + 1))
+    self.avg_ct = map(ps, self.flowsizes)
+    self.max_ct = self.avg_ct
+
 # Start the graphing
 SHAPES = ['1.2', '2.2']
 
@@ -70,7 +99,8 @@ for shape in SHAPES:
 
   lines = [FlowData(rcp_f, 'b', '+', 'RCP'),
            FlowData(tcp_f, '#00FF00', '.', 'TCP'),
-           SlowStart(200000)]
+           SlowStart(200000),
+           ProcessorSharing(200000)]
 
   # Average Flow Completion Time
   fig = plt.figure()
