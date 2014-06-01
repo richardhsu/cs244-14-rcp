@@ -91,16 +91,19 @@ class ProcessorSharing:
     self.max_ct = self.avg_ct
 
 # Start the graphing
-SHAPES = ['1.2', '2.2']
+#SHAPES = ['1.2', '2.2']
+SHAPES = ['1.2']
 
 for shape in SHAPES:
   rcp_f = "lib/rcp/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
   tcp_f = "lib/tcp/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
+  ps_f  = "lib/ps/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
 
   lines = [FlowData(rcp_f, 'b', '+', 'RCP'),
            FlowData(tcp_f, '#00FF00', '.', 'TCP'),
            SlowStart(200000),
-           ProcessorSharing(200000)]
+           ProcessorSharing(200000),
+           FlowData(cps_f, 'm', '.', 'Custom PS')]
 
   # Average Flow Completion Time
   fig = plt.figure()
