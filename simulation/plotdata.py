@@ -97,12 +97,14 @@ for shape in SHAPES:
   rcp_f = "lib/rcp/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
   tcp_f = "lib/tcp/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
   ps_f  = "lib/ps/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
+  cps_f = "lib/custom-ps/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
 
   lines = [FlowData(rcp_f, 'b', '+', 'RCP'),
            FlowData(tcp_f, '#00FF00', '.', 'TCP'),
            SlowStart(200000),
-           ProcessorSharing(200000)]
-           FlowData(ps_f, 'm', '.', 'Custom PS')]
+           ProcessorSharing(200000),
+           FlowData(ps_f, 'm', '.', 'Our PS Simulated'),
+           FlowData(cps_f, 'c', '.', 'PS RCP Simulated')]
 
   # Average Flow Completion Time
   fig = plt.figure()

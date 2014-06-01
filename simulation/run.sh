@@ -16,4 +16,15 @@ do
   cd $cwd
 done
 
+# Execute Processor Sharing Simulation
+cd "lib/ps/pareto-flowSizes/"
+./ps-bash-sim.sh
+cd $cwd
+
+# Execute PS RCP Simulation
+cd "lib/custom-ps/pareto-flowSizes/"
+python custom-ps.py
+cd $cwd
+
+# Plot all Data
 python plotdata.py
