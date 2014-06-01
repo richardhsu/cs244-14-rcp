@@ -103,7 +103,7 @@ for shape in SHAPES:
            FlowData(tcp_f, '#00FF00', '.', 'TCP'),
            SlowStart(200000),
            ProcessorSharing(200000),
-           FlowData(cps_f, 'm', '.', 'Custom PS')]
+           FlowData(ps_f, 'm', '.', 'Custom PS')]
 
   # Average Flow Completion Time
   fig = plt.figure()

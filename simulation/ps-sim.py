@@ -4,7 +4,7 @@ from scipy.stats import pareto
 
 
 # Network characteristics
-num_flows = 1000 
+num_flows = 2399499
 # Total number of flows in rcp simulation: 2399499
 packet_size = 1000 # bytes
 link_rate = 2.4 # Gbps
@@ -25,7 +25,7 @@ lamb = link_rate_bits*load/(mean_npkts*(packet_size)*8.0)
 # Output parameters and details
 debug_flag = False
 output_file = "lib/ps/pareto-flowSizes/logs/flowSizeVsDelay-sh" + str(shape)
-log_file_str = "lib/ps/pareto-flowsizes/logs/logFile-sh" + str(shape)
+log_file_str = "lib/ps/pareto-flowSizes/logs/logFile-sh" + str(shape)
 
 log_file = open(log_file_str, 'w')
 
