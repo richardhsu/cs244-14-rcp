@@ -89,7 +89,7 @@ def update_flows(curr_flows, duration, curr_time):
             flow.buffered = max(0.0, flow.buffered - outgoing)
             if flow.buffered <= 0.0 and flow.complete_dl < curr_time:
                 # this flow has completed, so remove.
-                flow.fct = curr_time - flow.arrival + rtt
+                flow.fct = curr_time - flow.arrival + 1.5*rtt
                 flow.finished = True
                 num_flows -= 1
                 if debug_flag:
