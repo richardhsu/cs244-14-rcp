@@ -206,6 +206,7 @@ if __name__ == "__main__":
     scale = (shape-1.0)/shape * mean_npkts
     lamb = link_rate * (10 ** 9)/(mean_npkts*(packet_size)*8.0)
 
+    print "Number of flows: %d" % num_flows
     ret_list = simulate()
     output_file = "logs/flowSizeVsDelay-sh" + str(shape)
     f = open(output_file, 'w')
