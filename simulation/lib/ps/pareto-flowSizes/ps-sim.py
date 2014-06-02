@@ -18,7 +18,7 @@ link_rate = -1
 scale = -1
 lamb = -1
 
-delta = 0.0000001
+delta = 0.000001
 
 # Output parameters and details
 debug_flag = False
@@ -81,11 +81,14 @@ def update_flows(curr_flows, duration, curr_time):
                 # incoming = link_rate * (10 ** 9) * min(delta, self.complete_dl - curr_time)
                 flow.buffered += incoming
             outgoing = link_rate * (10**9) * delta / (num_flows)
+            # print "outgoing link rate", outgoing/ delta/(10**9), "num_flows:", num_flows
+            # print "reducing:", flow.buffered, "by", outgoing
             flow.buffered = max(0.0, flow.buffered - outgoing)
             if flow.buffered <= 0.0 and flow.complete_dl < curr_time:
                 # this flow has completed, so remove.
-                flow.fct = curr_time
+                flow.fct = curr_time - flow.arrival
                 flow.finished = True
+                num_flows -= 1
                 print "Finished flow (arrival: %.8f, packets: %d); fct %f" % (flow.arrival, flow.packet_length, flow.fct)
         curr_time += delta
 
