@@ -44,7 +44,8 @@ def generate_flows(num_flows):
     all_flows = Queue.Queue()
     inter_arrivals = np.random.exponential(1.0/lamb, num_flows)
     flow_lengths = pareto.rvs(shape, scale=scale, size=num_flows)
-    print "average flow length:", sum(flow_lengths)/num_flows
+    if debug_flag:
+        print "average flow length:", sum(flow_lengths)/num_flows
     prev_time = 0
     for i in range(num_flows):
         curr_time = prev_time + inter_arrivals[i]
@@ -60,13 +61,15 @@ def generate_flows(num_flows):
 
 def update_flows(curr_flows, duration, curr_time):
     stop_time = curr_time + duration
-    print "Starting update in time (%.8f, %.8f) Current active flows: %d." % (curr_time, stop_time, len(curr_flows))
+    if debug_flag:
+        print "Starting update in time (%.8f, %.8f) Current active flows: %d." % (curr_time, stop_time, len(curr_flows))
 
     # update flow lists
     new_curr_flows = []
     done_flows = []
     if not curr_flows:
-        print "No flows to update in this interval."
+        if debug_flag:
+            print "No flows to update in this interval."
     num_flows = len(curr_flows)
     # update how many flows each flow competed with
     for flow in curr_flows:
@@ -86,10 +89,11 @@ def update_flows(curr_flows, duration, curr_time):
             flow.buffered = max(0.0, flow.buffered - outgoing)
             if flow.buffered <= 0.0 and flow.complete_dl < curr_time:
                 # this flow has completed, so remove.
-                flow.fct = curr_time - flow.arrival
+                flow.fct = curr_time - flow.arrival + rtt
                 flow.finished = True
                 num_flows -= 1
-                print "Finished flow (arrival: %.8f, packets: %d); fct %f" % (flow.arrival, flow.packet_length, flow.fct)
+                if debug_flag:
+                    print "Finished flow (arrival: %.8f, packets: %d); fct %f" % (flow.arrival, flow.packet_length, flow.fct)
         curr_time += delta
 
     for flow in curr_flows:
@@ -141,6 +145,7 @@ def simulate():
     print "Sanity check on pareto mean packets:", pareto.stats(shape, scale=scale, moments='m')
     print "Poisson process with lambda:", lamb
     inter_arrival, all_flows, max_packets = generate_flows(num_flows)
+    print "Starting simulation."
     curr_flows = []
     all_done_flows = []
     curr_time = 0
@@ -154,23 +159,25 @@ def simulate():
         # update loop state
         curr_time += inter_arrival
         all_done_flows += done_flows
-
-        print update_log(curr_time, init_active_count, len(done_flows), len(all_done_flows))
-
         curr_flows.append(new_flow) # newest arriving flow
-        print arrival_log(new_flow)
-        print
+
+        if debug_flag:
+            print update_log(curr_time, init_active_count, len(done_flows), len(all_done_flows))
+            print arrival_log(new_flow)
+            print
 
     # all flows have arrived, so migrate to updating once every E[arrival] = 1/lamb.
-    print "All flows have arrived. Updating remaining flows..."
+    if debug_flag:
+        print "All flows have arrived. Updating remaining flows..."
     update_duration = 1.0/lamb
     while len(all_done_flows) != num_flows:
         init_active_count = len(curr_flows)
         curr_flows, done_flows = update_flows(curr_flows, update_duration, curr_time)
         curr_time += update_duration
         all_done_flows += done_flows
-        print update_log(curr_time, init_active_count, len(done_flows), len(all_done_flows))
-        print
+        if debug_flag:
+            print update_log(curr_time, init_active_count, len(done_flows), len(all_done_flows))
+            print
 
     print "Finished simulation. FCT results:"
     for done_flow in all_done_flows:
