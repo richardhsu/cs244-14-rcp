@@ -36,7 +36,7 @@ The following can be used for Ubuntu systems and have been tested for Ubuntu
 g++/gcc and X11 library code.
 
 ```bash
-sudo apt-get install build-essential autoconf automake perl g++ libx11-dev libxt-dev libx11-dev libxmu-dev
+sudo apt-get install git build-essential autoconf automake perl g++ libx11-dev libxt-dev libx11-dev libxmu-dev xorg-dev xgraph
 ```
 
 **Step 1**: In the folder that you want NS-2.35 code perform the following steps:
@@ -87,17 +87,15 @@ IMPORTANT NOTICES:
     variable. Otherwise ns/nam will complain during startup.
 ```
 
-**Step 5:** Install NS-2.35 as well so it can be executed on the command line:
+An example for what may be put in `.bashrc` file:
 
 ```
-cd ns-2.35
-./configure
-make clean
-make
-make install
-```
+export PATH=$PATH:/home/ubuntu/ns-allinone-2.35/bin:/home/ubuntu/ns-allinone-2.35/tcl8.5.10/unix:/home/ubuntu/ns-allinone-2.35/tk8.5.10/unix
 
-The last line may require a `sudo make install` instead depending on permissions.
+export LD_LIBRARY_PATH=/home/ubuntu/ns-allinone-2.35/otcl-1.14:/home/ubuntu/ns-allinone-2.35/lib
+
+export TCL_LIBRARY=/home/ubuntu/ns-allinone-2.35/tcl8.5.10/library
+```
 
 #### Python libraries
 
