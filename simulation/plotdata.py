@@ -81,9 +81,9 @@ class ProcessorSharing:
     """ Initialize Processor Sharing Data
     Calculates given processor sharing algorithm.
     """
-    self.color = 'r'
+    self.color = 'k'
     self.marker = None
-    self.linestyle = ':'
+    self.linestyle = '-'
     self.label = "Processor Sharing"
 
     self.flowsizes = list(xrange(maxsize + 1))
@@ -91,7 +91,8 @@ class ProcessorSharing:
     self.max_ct = self.avg_ct
 
 # Start the graphing
-SHAPES = ['1.2', '2.2']
+#SHAPES = ['1.2', '2.2']
+SHAPES = ['1.2']
 
 for shape in SHAPES:
   rcp_f = "lib/rcp/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
@@ -99,12 +100,12 @@ for shape in SHAPES:
   ps_f  = "lib/ps/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
   cps_f = "lib/custom-ps/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
 
-  lines = [FlowData(rcp_f, 'b', '+', 'RCP'),
-           FlowData(tcp_f, '#00FF00', '.', 'TCP'),
+  lines = [FlowData(tcp_f, '#00FF00', '.', 'TCP'),
            SlowStart(200000),
-           ProcessorSharing(200000),
+           FlowData(cps_f, 'c', '.', 'PS RCP Simulated'),
            FlowData(ps_f, 'm', '.', 'Our PS Simulated'),
-           FlowData(cps_f, 'c', '.', 'PS RCP Simulated')]
+           FlowData(rcp_f, 'b', '+', 'RCP'),
+           ProcessorSharing(200000)]
 
   # Average Flow Completion Time
   fig = plt.figure()
