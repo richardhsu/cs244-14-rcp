@@ -1,12 +1,17 @@
 #!/bin/env python
 
+MAX_TIME = 300  # Max simulation time
+RTT = 0.1
+C = 2.4*1000000000/(1000*8) # Pkts/Sec
+SHAPES = ['1.2', '2.2']
+
 class Flow:
 
   def __init__(self, arrival, size):
     self.arrival = arrival
     self.original_size = size
     self.size = size
-    self.ct = 0.0
+    self.ct = 1.5*RTT
 
   def update(self, capacity, max_dt):
     if self.size <= 0.0: return False  # Don't process if done
@@ -20,17 +25,12 @@ class Flow:
       self.ct += self.size/capacity  # Add timeslice of completion
       return True
 
-MAX_TIME = 300  # Max simulation time
-RTT = 0.1
-C = 2.4*1000000000/(1000*8) # Pkts/Sec
-SHAPES = ['1.2', '2.2']
-
 for shape in SHAPES:
   rcp_f = "../../rcp/pareto-flowSizes/logs/logFile-pareto-sh" + shape
   out_f = "logs/flowSizeVsDelay-sh" + shape
 
   flows = []
-  active_flows = 0
+  active_flows = []
   prev_ts = 0.0
   curr_ts = 0.0
   processed = 0
@@ -48,14 +48,19 @@ for shape in SHAPES:
       nextflow = Flow(curr_ts, float(datum[7]))
 
       # Time interval [prev_ts, curr_ts]
-      if active_flows > 0:
-        capacity = C/active_flows # Get fraction fair to number of active flows
-        for flow in flows:
+      if len(active_flows) > 0:
+        capacity = C/len(active_flows) # Get fraction fair to number of active flows
+
+        remove_flows = []
+        for flow in active_flows:
           # Go through flows and update for time interval
           if flow.update(capacity, curr_ts - prev_ts):
-            active_flows -= 1
+            remove_flows.append(flow)
 
-      active_flows += 1
+        for flow in remove_flows:
+          active_flows.remove(flow)
+
+      active_flows.append(nextflow)
       flows.append(nextflow)
       prev_ts = curr_ts
     if processed % 10000 == 0:
@@ -67,13 +72,13 @@ for shape in SHAPES:
 
   # Finished processing files
   # There may be some flows still remaining
-  if active_flows > 0:
-    capacity = C/active_flows
-    for flow in flows:
+  if len(active_flows) > 0:
+    print "There are some remaining flows."
+    capacity = C/len(active_flows)
+    for flow in active_flows:
       # Let flows complete
       flow.update(capacity, MAX_TIME)
-
-  print "Completed remaining flows."
+    print "Completed remaining flows."
 
   data = {}
   # Record data
@@ -90,8 +95,11 @@ for shape in SHAPES:
   print "Completed calculations."
 
   out = open(out_f, 'w')
-  for key in data.keys():
-    record = data[key]
+  keys = data.keys()
+  keys = map(float, keys)
+  keys.sort()
+  for key in keys:
+    record = data["%.1f" % (key)]
     avgct = record[1] / record[0]
     maxct = record[2]
 
