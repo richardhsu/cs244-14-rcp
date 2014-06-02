@@ -115,8 +115,7 @@ def save_figure(lines, axis_range, ylabel, xlabel, savefn, log_y=True, log_x=Fal
 
 # Start the graphing /////////////////////////////////////////////////////////
 
-#SHAPES = ['1.2', '2.2']
-SHAPES = ['1.2']
+SHAPES = ['1.2', '2.2']
 
 for shape in SHAPES:
   rcp_f = "lib/rcp/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
