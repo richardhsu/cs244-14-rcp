@@ -83,7 +83,7 @@ class ProcessorSharing:
     """
     self.color = color
     self.marker = None
-    self.linestyle = '-'
+    self.linestyle = ':'
     self.label = "Processor Sharing"
 
     self.flowsizes = list(xrange(maxsize + 1))
@@ -168,7 +168,9 @@ for shape in SHAPES:
 
   if shape == '1.2':
     # Graphs with Processor Sharing (Custom 1)
-    ps_l.color = 'k'
+    ps_l.color = 'k' # Make more visible
+    ps_l.linestyle = '-'
+
     lines = [custom_ps_1, rcp_l, ps_l]
     # Average Flow Completion Time
     save_figure(lines,
@@ -198,7 +200,6 @@ for shape in SHAPES:
                 False)
 
     # Graphs with Processor Sharing (Custom 2)
-    ps_l.color = 'k'
     lines = [custom_ps_2, rcp_l, ps_l]
     # Average Flow Completion Time
     save_figure(lines,
