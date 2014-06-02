@@ -6,6 +6,7 @@ from scipy.stats import pareto
 
 # Network characteristics
 num_flows = 100 
+notify_step = 1000 # every <notify_step> flow arrivals, alert.
 # Total number of flows in rcp simulation: 2399499
 packet_size = 1000 # bytes
 mean_npkts = 25
@@ -149,8 +150,15 @@ def simulate():
     curr_flows = []
     all_done_flows = []
     curr_time = 0
+    count = 0
+    count_step = notify_step 
+    count_big = 0
     while not all_flows.empty():
         new_flow = all_flows.get()
+        count += 1
+        if count/count_step > count_big:
+            count_big += 1
+            print "%d flows have arrived..." % count
         inter_arrival = new_flow.inter_arrival
         init_active_count = len(curr_flows)
         # update flows
