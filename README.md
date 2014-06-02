@@ -42,7 +42,7 @@ sudo apt-get install build-essential autoconf automake perl g++ libx11-dev libxt
 **Step 1**: In the folder that you want NS-2.35 code perform the following steps:
 
 ```bash
-wget http://downloads.sourceforge.net/project/nsnam/allinone/ns-allinone-2.35/ns-allinone-2.35.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fnsnam%2Ffiles%2Fallinone%2Fns-allinone-2.35%2F&ts=1401492260&use_mirror=tcpdiag -O ns-allinone-2.35.tar.gz
+wget -O ns-allinone-2.35.tar.gz http://downloads.sourceforge.net/project/nsnam/allinone/ns-allinone-2.35/ns-allinone-2.35.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fnsnam%2Ffiles%2Fallinone%2Fns-allinone-2.35%2F&ts=1401492260&use_mirror=tcpdiag
 tar -xzvf ns-allinone-2.35.tar.gz
 ```
 
