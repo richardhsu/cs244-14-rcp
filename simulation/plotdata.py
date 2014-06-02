@@ -156,7 +156,7 @@ for shape in SHAPES:
   # Average Flow Completion Time (Long flows)
   save_figure(lines,
               True,
-              [10, 100000, 0.1, 100],
+              [1000, 100000, 0.1, 100],
               "Average Flow Completion Time [sec]",
               "flow size [pkts] (log scale)",
               "graphs/fig12-afct-long-tcp-rcp-" + shape + ".png",
@@ -192,7 +192,7 @@ for shape in SHAPES:
     # Average Flow Completion Time (Long flows)
     save_figure(lines,
                 True,
-                [10, 100000, 0.1, 100],
+                [1000, 100000, 0.1, 100],
                 "Average Flow Completion Time [sec]",
                 "flow size [pkts] (log scale)",
                 "graphs/fig12-afct-long-custom-ps-1-" + shape + ".png",
@@ -224,7 +224,7 @@ for shape in SHAPES:
     # Average Flow Completion Time (Long flows)
     save_figure(lines,
                 True,
-                [10, 100000, 0.1, 100],
+                [1000, 100000, 0.1, 100],
                 "Average Flow Completion Time [sec]",
                 "flow size [pkts] (log scale)",
                 "graphs/fig12-afct-long-custom-ps-2-" + shape + ".png",
