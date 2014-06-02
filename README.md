@@ -101,15 +101,13 @@ The last line may require a `sudo make install` instead depending on permissions
 
 #### Python libraries
 
-Our scripts require additional Python libraries to run additional simulations and to generate the graphics. You can install them on Ubuntu as follows: 
+Our scripts require additional Python libraries to run additional simulations and to generate the graphics. You can install them on Ubuntu as follows:
 
 ```bash
-sudo apt-get install python-matplotlib python-pip gfortran libblas-dev liblapack-dev g++
-sudo pip install numpy
-sudo pip install scipy
+sudo apt-get install python-numpy python-scipy python-matplotlib ipython ipython-notebook python-pandas python-sympy python-nose
 ```
 
-For other systems you can refer to the [Matplotlib Documentation][matplotlib] or [NumPy/SciPy Documentation][scipy] 
+For other systems you can refer to the [Matplotlib Documentation][matplotlib] or [NumPy/SciPy Documentation][scipy]
 for more information.
 
 ## Reproduction Code
