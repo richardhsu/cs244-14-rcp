@@ -117,18 +117,25 @@ def save_figure(lines, axis_range, ylabel, xlabel, savefn, log_y=True, log_x=Fal
 
 SHAPES = ['1.2', '2.2']
 
+# Note: Graphs for our Custom Processor Sharing simulations are only for
+# 1.2 as this is the more interesting case to look at.
+
 for shape in SHAPES:
   rcp_f = "lib/rcp/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
   tcp_f = "lib/tcp/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
-  cps1_f  = "lib/ps/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
-  cps2_f = "lib/custom-ps/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
+
+  if shape == '1.2':
+    cps1_f  = "lib/ps/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
+    cps2_f = "lib/custom-ps/pareto-flowSizes/logs/flowSizeVsDelay-sh" + shape
 
   tcp_l = FlowData(tcp_f, '#00FF00', '.', 'TCP')
   rcp_l = FlowData(rcp_f, 'b', '+', 'RCP')
   ss_l = SlowStart(200000, 'r')
   ps_l = ProcessorSharing(200000, 'r')
-  custom_ps_1 = FlowData(cps1_f, 'm', '.', 'Full PS Simulated')
-  custom_ps_2 = FlowData(cps2_f, 'c', '.', 'PS Simulated')
+
+  if shape == '1.2':
+    custom_ps_1 = FlowData(cps1_f, 'm', '.', 'Full PS Simulated')
+    custom_ps_2 = FlowData(cps2_f, 'c', '.', 'PS Simulated')
 
   # Graph to look like those in paper
   lines = [tcp_l, rcp_l, ss_l, ps_l]
@@ -159,63 +166,64 @@ for shape in SHAPES:
               True,
               False)
 
-  # Graphs with Processor Sharing (Custom 1)
-  ps_l.color = 'k'
-  lines = [custom_ps_1, rcp_l, ps_l]
-  # Average Flow Completion Time
-  save_figure(lines,
-              [0, 2000, 0.1, 10],
-              "Average Flow Completion Time [sec]",
-              "flow size [pkts] (normal scale)",
-              "graphs/fig12-afct-custom-ps-1-" + shape + ".png",
-              True,
-              False)
+  if shape == '1.2':
+    # Graphs with Processor Sharing (Custom 1)
+    ps_l.color = 'k'
+    lines = [custom_ps_1, rcp_l, ps_l]
+    # Average Flow Completion Time
+    save_figure(lines,
+                [0, 2000, 0.1, 10],
+                "Average Flow Completion Time [sec]",
+                "flow size [pkts] (normal scale)",
+                "graphs/fig12-afct-custom-ps-1-" + shape + ".png",
+                True,
+                False)
 
-  # Average Flow Completion Time (Long flows)
-  save_figure(lines,
-              [10, 100000, 0.1, 100],
-              "Average Flow Completion Time [sec]",
-              "flow size [pkts] (log scale)",
-              "graphs/fig12-afct-long-custom-ps-1-" + shape + ".png",
-              True,
-              True)
+    # Average Flow Completion Time (Long flows)
+    save_figure(lines,
+                [10, 100000, 0.1, 100],
+                "Average Flow Completion Time [sec]",
+                "flow size [pkts] (log scale)",
+                "graphs/fig12-afct-long-custom-ps-1-" + shape + ".png",
+                True,
+                True)
 
-  # Max Flow Completion Time
-  save_figure(lines,
-              [0, 2000, 0.1, 10],
-              "Max. Flow Completion Time [sec]",
-              "flow size [pkts] (normal scale)",
-              "graphs/fig12-maxct-custom-ps-1-" + shape + ".png",
-              True,
-              False)
+    # Max Flow Completion Time
+    save_figure(lines,
+                [0, 2000, 0.1, 10],
+                "Max. Flow Completion Time [sec]",
+                "flow size [pkts] (normal scale)",
+                "graphs/fig12-maxct-custom-ps-1-" + shape + ".png",
+                True,
+                False)
 
-  # Graphs with Processor Sharing (Custom 2)
-  ps_l.color = 'k'
-  lines = [custom_ps_2, rcp_l, ps_l]
-  # Average Flow Completion Time
-  save_figure(lines,
-              [0, 2000, 0.1, 10],
-              "Average Flow Completion Time [sec]",
-              "flow size [pkts] (normal scale)",
-              "graphs/fig12-afct-custom-ps-2-" + shape + ".png",
-              True,
-              False)
+    # Graphs with Processor Sharing (Custom 2)
+    ps_l.color = 'k'
+    lines = [custom_ps_2, rcp_l, ps_l]
+    # Average Flow Completion Time
+    save_figure(lines,
+                [0, 2000, 0.1, 10],
+                "Average Flow Completion Time [sec]",
+                "flow size [pkts] (normal scale)",
+                "graphs/fig12-afct-custom-ps-2-" + shape + ".png",
+                True,
+                False)
 
-  # Average Flow Completion Time (Long flows)
-  save_figure(lines,
-              [10, 100000, 0.1, 100],
-              "Average Flow Completion Time [sec]",
-              "flow size [pkts] (log scale)",
-              "graphs/fig12-afct-long-custom-ps-2-" + shape + ".png",
-              True,
-              True)
+    # Average Flow Completion Time (Long flows)
+    save_figure(lines,
+                [10, 100000, 0.1, 100],
+                "Average Flow Completion Time [sec]",
+                "flow size [pkts] (log scale)",
+                "graphs/fig12-afct-long-custom-ps-2-" + shape + ".png",
+                True,
+                True)
 
-  # Max Flow Completion Time
-  save_figure(lines,
-              [0, 2000, 0.1, 10],
-              "Max. Flow Completion Time [sec]",
-              "flow size [pkts] (normal scale)",
-              "graphs/fig12-maxct-custom-ps-2-" + shape + ".png",
-              True,
-              False)
+    # Max Flow Completion Time
+    save_figure(lines,
+                [0, 2000, 0.1, 10],
+                "Max. Flow Completion Time [sec]",
+                "flow size [pkts] (normal scale)",
+                "graphs/fig12-maxct-custom-ps-2-" + shape + ".png",
+                True,
+                False)
 

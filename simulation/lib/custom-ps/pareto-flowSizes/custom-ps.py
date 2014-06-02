@@ -3,7 +3,7 @@
 MAX_TIME = 300  # Max simulation time
 RTT = 0.1
 C = 2.4*1000000000/(1000*8) # Pkts/Sec
-SHAPES = ['1.2', '2.2']
+SHAPES = ['1.2']
 
 class Flow:
 
