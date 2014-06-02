@@ -17,8 +17,7 @@ by Nandita Dukkipati and Nick McKeown (http://yuba.stanford.edu/rcp/)
 
 We provide an easy Amazon EC2 AMI for you to run the simulation test code. It
 has everything set up so you only need to run the code and view the output!
-On Amazon EC2 in the Oregon location the AMI's name will be "CS244-2014-RCP".
-
+On Amazon EC2 in the Oregon location the AMI's name will be `CS244-2014-RCP`.
 ### Your Own Setup
 
 The following are instructions to help you run it on your own system. We
@@ -114,7 +113,11 @@ Now you just need to go into the `simulation` folder of our code and type
 `./run.sh`. You may need execution permissions if it isn't set properly when
 you've cloned the repository. You'll find the graphs produced in the
 `simulation/graphs` which are to reproduce Figure 12 in the
-[full version][full] of the RCP paper.
+[full version][full] of the RCP paper. Note that the simulations and plotting
+will take roughly 1.5 hours to complete.
+
+Again, we provide an AMI on Amazon EC2 for your convenience. You can search
+the Oregon region for `CS244-2014-RCP` for the AMI. 
 
 [paper]: http://yuba.stanford.edu/rcp/flowCompTime-dukkipati.pdf
 [full]: http://yuba.stanford.edu/techreports/TR05-HPNG-112102.pdf
