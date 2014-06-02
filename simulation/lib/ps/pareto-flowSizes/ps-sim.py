@@ -6,6 +6,7 @@ from scipy.stats import pareto
 
 # Network characteristics
 num_flows = 100 
+notify_step = 1000 # every <notify_step> flow arrivals, alert.
 # Total number of flows in rcp simulation: 2399499
 packet_size = 1000 # bytes
 mean_npkts = 25
@@ -18,7 +19,7 @@ link_rate = -1
 scale = -1
 lamb = -1
 
-delta = 0.0000001
+delta = 0.000001
 
 # Output parameters and details
 debug_flag = False
@@ -44,7 +45,8 @@ def generate_flows(num_flows):
     all_flows = Queue.Queue()
     inter_arrivals = np.random.exponential(1.0/lamb, num_flows)
     flow_lengths = pareto.rvs(shape, scale=scale, size=num_flows)
-    print "average flow length:", sum(flow_lengths)/num_flows
+    if debug_flag:
+        print "average flow length:", sum(flow_lengths)/num_flows
     prev_time = 0
     for i in range(num_flows):
         curr_time = prev_time + inter_arrivals[i]
@@ -60,13 +62,15 @@ def generate_flows(num_flows):
 
 def update_flows(curr_flows, duration, curr_time):
     stop_time = curr_time + duration
-    print "Starting update in time (%.8f, %.8f) Current active flows: %d." % (curr_time, stop_time, len(curr_flows))
+    if debug_flag:
+        print "Starting update in time (%.8f, %.8f) Current active flows: %d." % (curr_time, stop_time, len(curr_flows))
 
     # update flow lists
     new_curr_flows = []
     done_flows = []
     if not curr_flows:
-        print "No flows to update in this interval."
+        if debug_flag:
+            print "No flows to update in this interval."
     num_flows = len(curr_flows)
     # update how many flows each flow competed with
     for flow in curr_flows:
@@ -81,12 +85,16 @@ def update_flows(curr_flows, duration, curr_time):
                 # incoming = link_rate * (10 ** 9) * min(delta, self.complete_dl - curr_time)
                 flow.buffered += incoming
             outgoing = link_rate * (10**9) * delta / (num_flows)
+            # print "outgoing link rate", outgoing/ delta/(10**9), "num_flows:", num_flows
+            # print "reducing:", flow.buffered, "by", outgoing
             flow.buffered = max(0.0, flow.buffered - outgoing)
             if flow.buffered <= 0.0 and flow.complete_dl < curr_time:
                 # this flow has completed, so remove.
-                flow.fct = curr_time
+                flow.fct = curr_time - flow.arrival + 1.5*rtt
                 flow.finished = True
-                print "Finished flow (arrival: %.8f, packets: %d); fct %f" % (flow.arrival, flow.packet_length, flow.fct)
+                num_flows -= 1
+                if debug_flag:
+                    print "Finished flow (arrival: %.8f, packets: %d); fct %f" % (flow.arrival, flow.packet_length, flow.fct)
         curr_time += delta
 
     for flow in curr_flows:
@@ -138,11 +146,19 @@ def simulate():
     print "Sanity check on pareto mean packets:", pareto.stats(shape, scale=scale, moments='m')
     print "Poisson process with lambda:", lamb
     inter_arrival, all_flows, max_packets = generate_flows(num_flows)
+    print "Starting simulation."
     curr_flows = []
     all_done_flows = []
     curr_time = 0
+    count = 0
+    count_step = notify_step 
+    count_big = 0
     while not all_flows.empty():
         new_flow = all_flows.get()
+        count += 1
+        if count/count_step > count_big:
+            count_big += 1
+            print "%d flows have arrived..." % count
         inter_arrival = new_flow.inter_arrival
         init_active_count = len(curr_flows)
         # update flows
@@ -151,23 +167,25 @@ def simulate():
         # update loop state
         curr_time += inter_arrival
         all_done_flows += done_flows
-
-        print update_log(curr_time, init_active_count, len(done_flows), len(all_done_flows))
-
         curr_flows.append(new_flow) # newest arriving flow
-        print arrival_log(new_flow)
-        print
+
+        if debug_flag:
+            print update_log(curr_time, init_active_count, len(done_flows), len(all_done_flows))
+            print arrival_log(new_flow)
+            print
 
     # all flows have arrived, so migrate to updating once every E[arrival] = 1/lamb.
-    print "All flows have arrived. Updating remaining flows..."
+    if debug_flag:
+        print "All flows have arrived. Updating remaining flows..."
     update_duration = 1.0/lamb
     while len(all_done_flows) != num_flows:
         init_active_count = len(curr_flows)
         curr_flows, done_flows = update_flows(curr_flows, update_duration, curr_time)
         curr_time += update_duration
         all_done_flows += done_flows
-        print update_log(curr_time, init_active_count, len(done_flows), len(all_done_flows))
-        print
+        if debug_flag:
+            print update_log(curr_time, init_active_count, len(done_flows), len(all_done_flows))
+            print
 
     print "Finished simulation. FCT results:"
     for done_flow in all_done_flows:
@@ -196,6 +214,7 @@ if __name__ == "__main__":
     scale = (shape-1.0)/shape * mean_npkts
     lamb = link_rate * (10 ** 9)/(mean_npkts*(packet_size)*8.0)
 
+    print "Number of flows: %d" % num_flows
     ret_list = simulate()
     output_file = "logs/flowSizeVsDelay-sh" + str(shape)
     f = open(output_file, 'w')
