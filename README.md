@@ -17,7 +17,8 @@ by Nandita Dukkipati and Nick McKeown (http://yuba.stanford.edu/rcp/)
 
 We provide an easy Amazon EC2 AMI for you to run the simulation test code. It
 has everything set up so you only need to run the code and view the output!
-On Amazon EC2 in the Oregon location the AMI's name will be `CS244-2014-RCP`.
+On Amazon EC2 in the Oregon location the AMI's name will be `CS244-2014-RCP`. Once started, follow the below instructions in the section titled 'Reproduction Code.'
+
 ### Your Own Setup
 
 The following are instructions to help you run it on your own system. We
@@ -27,11 +28,11 @@ Ubuntu 14.04 LTS.
 #### Installing NS-2.35 with RCP code
 
 You will need to install NS-2.35 All In One package on your system, which you
-can place anywhere on your system.
+can place anywhere in your system.
 
 **Step 0**: You'll want to make sure you have the necessary tools installed.
 The following can be used for Ubuntu systems and have been tested for Ubuntu
-14.04 LTS. Generally speaking you'll need tools for building, autoconf,
+14.04 LTS. Generally speaking you will need tools for building, autoconf,
 g++/gcc and X11 library code.
 
 ```bash
@@ -46,7 +47,7 @@ tar -xzvf ns-allinone-2.35.tar.gz
 ```
 
 **Step 2:**: Next you'll want to patch it for RCP. Copy the `rcp-2.35.patch`
-file from our repository into the `ns-allinone-2.35` directory. Next you'll
+file from our repository into the `ns-allinone-2.35` directory. Then 
 perform the patch:
 
 ```bash
@@ -60,7 +61,7 @@ In the top level of the `ns-allinone-2.35` folder run the install command:
 ./install
 ```
 
-Hopefully it will install successfully, if not read the error codes and fix.
+Hopefully it will install successfully; if not read the error codes and fix.
 Unfortunately we may not be able to provide assistance with this.
 
 **Step 4:** The installation should provide some output on changing the path.
@@ -111,11 +112,11 @@ for more information.
 
 Now you just need to go into the `simulation` folder of our code and type
 `./run.sh`. You may need execution permissions if it isn't set properly when
-you've cloned the repository. You'll find the graphs produced in the
-`simulation/graphs` which are to reproduce Figure 12 in the
+you've cloned the repository. You can find the graphs produced in the
+`simulation/graphs` , which reproduce Figure 12 in the
 [full version][full] of the RCP paper. Note that the simulations and plotting
 will take roughly 1.5 hours to complete and you should use `screen` or `tmux`
-so that any issues of disconnecting from the server does not interrupt the
+so that any issues of disconnecting from the server do not interrupt the
 run.
 
 Again, we provide an AMI on Amazon EC2 for your convenience. You can search
