@@ -114,7 +114,9 @@ Now you just need to go into the `simulation` folder of our code and type
 you've cloned the repository. You'll find the graphs produced in the
 `simulation/graphs` which are to reproduce Figure 12 in the
 [full version][full] of the RCP paper. Note that the simulations and plotting
-will take roughly 1.5 hours to complete.
+will take roughly 1.5 hours to complete and you should use `screen` or `tmux`
+so that any issues of disconnecting from the server does not interrupt the
+run.
 
 Again, we provide an AMI on Amazon EC2 for your convenience. You can search
 the Oregon region for `CS244-2014-RCP` for the AMI. 
