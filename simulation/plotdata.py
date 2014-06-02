@@ -91,12 +91,16 @@ class ProcessorSharing:
     self.max_ct = self.avg_ct
 
 # Plotting
-def save_figure(lines, axis_range, ylabel, xlabel, savefn, log_y=True, log_x=False):
+def save_figure(lines, is_avg, axis_range, ylabel, xlabel, savefn, log_y=True, log_x=False):
   fig = plt.figure()
   graph = fig.add_subplot(111)
 
   for line in lines:
-    graph.plot(line.flowsizes, line.max_ct, linestyle=line.linestyle,
+    if is_avg:
+      y_values = line.avg_ct
+    else:
+      y_values = line.max_ct
+    graph.plot(line.flowsizes, y_values, linestyle=line.linestyle,
                color=line.color, marker=line.marker, label=line.label)
 
   if log_y:
@@ -141,6 +145,7 @@ for shape in SHAPES:
   lines = [tcp_l, rcp_l, ss_l, ps_l]
   # Average Flow Completion Time
   save_figure(lines,
+              True,
               [0, 2000, 0.1, 100],
               "Average Flow Completion Time [sec]",
               "flow size [pkts] (normal scale)",
@@ -150,6 +155,7 @@ for shape in SHAPES:
 
   # Average Flow Completion Time (Long flows)
   save_figure(lines,
+              True,
               [10, 100000, 0.1, 100],
               "Average Flow Completion Time [sec]",
               "flow size [pkts] (log scale)",
@@ -159,6 +165,7 @@ for shape in SHAPES:
 
   # Max Flow Completion Time
   save_figure(lines,
+              False,
               [0, 2000, 0.1, 100],
               "Max. Flow Completion Time [sec]",
               "flow size [pkts] (normal scale)",
@@ -174,6 +181,7 @@ for shape in SHAPES:
     lines = [custom_ps_1, rcp_l, ps_l]
     # Average Flow Completion Time
     save_figure(lines,
+                True,
                 [0, 2000, 0.1, 10],
                 "Average Flow Completion Time [sec]",
                 "flow size [pkts] (normal scale)",
@@ -183,6 +191,7 @@ for shape in SHAPES:
 
     # Average Flow Completion Time (Long flows)
     save_figure(lines,
+                True,
                 [10, 100000, 0.1, 100],
                 "Average Flow Completion Time [sec]",
                 "flow size [pkts] (log scale)",
@@ -192,6 +201,7 @@ for shape in SHAPES:
 
     # Max Flow Completion Time
     save_figure(lines,
+                False,
                 [0, 2000, 0.1, 10],
                 "Max. Flow Completion Time [sec]",
                 "flow size [pkts] (normal scale)",
@@ -203,6 +213,7 @@ for shape in SHAPES:
     lines = [custom_ps_2, rcp_l, ps_l]
     # Average Flow Completion Time
     save_figure(lines,
+                True,
                 [0, 2000, 0.1, 10],
                 "Average Flow Completion Time [sec]",
                 "flow size [pkts] (normal scale)",
@@ -212,6 +223,7 @@ for shape in SHAPES:
 
     # Average Flow Completion Time (Long flows)
     save_figure(lines,
+                True,
                 [10, 100000, 0.1, 100],
                 "Average Flow Completion Time [sec]",
                 "flow size [pkts] (log scale)",
@@ -221,6 +233,7 @@ for shape in SHAPES:
 
     # Max Flow Completion Time
     save_figure(lines,
+                False,
                 [0, 2000, 0.1, 10],
                 "Max. Flow Completion Time [sec]",
                 "flow size [pkts] (normal scale)",
