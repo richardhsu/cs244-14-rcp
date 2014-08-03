@@ -13,12 +13,6 @@ by Nandita Dukkipati and Nick McKeown (http://yuba.stanford.edu/rcp/)
 
 ## Reproduction Setup
 
-### Amazon EC2 AMI
-
-We provide an easy Amazon EC2 AMI for you to run the simulation test code. It
-has everything set up so you only need to run the code and view the output!
-On Amazon EC2 in the Oregon location the AMI's name will be `CS244-2014-RCP`. Once started, follow the below instructions in the section titled 'Reproduction Code.'
-
 ### Your Own Setup
 
 The following are instructions to help you run it on your own system. We
@@ -119,11 +113,7 @@ will take roughly 1.5 hours to complete and you should use `screen` or `tmux`
 so that any issues of disconnecting from the server do not interrupt the
 run.
 
-Again, we provide an AMI on Amazon EC2 for your convenience. You can search
-the Oregon region for `CS244-2014-RCP` for the AMI. 
-
 [paper]: http://yuba.stanford.edu/rcp/flowCompTime-dukkipati.pdf
 [full]: http://yuba.stanford.edu/techreports/TR05-HPNG-112102.pdf
 [matplotlib]: http://matplotlib.org/users/installing.html
 [scipy]: http://docs.scipy.org/doc/
-
